@@ -7,8 +7,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	tmmerkle "github.com/tendermint/tendermint/proto/tendermint/crypto"
-	db "github.com/tendermint/tm-db"
+	tmmerkle "github.com/evdatsion/tendermint/proto/tendermint/crypto"
+	db "github.com/evdatsion/tm-db"
 )
 
 func TestProofOp(t *testing.T) {

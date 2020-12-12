@@ -9,8 +9,8 @@
 //
 // Basic usage of MutableTree:
 //
-//  import "github.com/cosmos/iavl"
-//  import "github.com/tendermint/tm-db"
+//  import "github.com/evdatsion/iavl"
+//  import "github.com/evdatsion/tm-db"
 //  ...
 //
 //  tree := iavl.NewMutableTree(db.NewMemDB(), 128)

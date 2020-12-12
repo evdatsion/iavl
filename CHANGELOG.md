@@ -1,24 +1,93 @@
 # Changelog
 
-## Unreleased
-
-The IAVL project has moved from https://github.com/tendermint/iavl to
-https://github.com/cosmos/iavl. This also affects the module import path, which is now
-`github.com/cosmos/iavl`.
-
-### Breaking Changes
-
-- The module path has changed from `github.com/tendermint/iavl` to `github.com/cosmos/iavl`.
-
-### Improvements
-
-- Proofs are now encoded using Protobuf instead of Amino. The binary encoding is identical.
-- Introduced new methods `CreateMembershipProof` and `CreateNonMembershipProof` to return 
-  ics23 ExistenceProof and NonExistenceProofs respectively
+## 0.15.0-rc5 (November 12, 2020)
 
 ### Bug Fixes
 
-- \#288 Fix panics when generating proofs for keys that are all `0xFF`.
+- [\#324](https://github.com/evdatsion/iavl/pull/324) Fix `DeleteVersions` not properly removing
+  orphans, and add `DeleteVersionsRange` to delete a range.
+
+## 0.15.0-rc4 (October 14, 2020)
+
+### Breaking Changes
+
+- [\#317](https://github.com/evdatsion/iavl/pull/317) `LoadVersion()` and `LazyLoadVersion()` now 
+  error if called with a positive version number on an empty tree.
+
+### Bug Fixes
+
+- [\#318](https://github.com/evdatsion/iavl/pull/318) Fix constant overflow when compiling for 32bit machines.
+
+## 0.14.2 (October 12, 2020)
+
+### Bug Fixes
+
+- [\#318](https://github.com/evdatsion/iavl/pull/318) Fix constant overflow when compiling for 32bit machines.
+
+## 0.14.1 (October 9, 2020)
+
+### Improvements
+
+- [\#299](https://github.com/evdatsion/iavl/pull/299) Added `Options.InitialVersion` to specify the 
+  initial version for new IAVL trees.
+
+- [\#312](https://github.com/evdatsion/iavl/pull/312) Added `MutableTree.SetInitialVersion()` to
+  set the initial version after tree initialization.
+
+### Bug Fixes
+
+- [\#288](https://github.com/evdatsion/iavl/pull/288) Fix panics when generating proofs for keys that are all `0xFF`.
+
+## 0.15.0-rc3 (August 27, 2020)
+
+### Improvements
+
+- [\#296](https://github.com/evdatsion/iavl/pull/296) Add `iavlserver`, a gRPC/REST API server.
+
+- [\#312](https://github.com/evdatsion/iavl/pull/312) Add `MutableTree.SetInitialVersion()` to set the 
+  initial version after tree initialization.
+
+### Bug Fixes
+
+- [\#309](https://github.com/evdatsion/iavl/pull/309) Fix `SaveVersion()` for old, empty versions as 
+  long as the new version is identical.
+
+## 0.15.0-rc2 (August 13, 2020)
+
+### Breaking Changes
+
+- [\#304](https://github.com/evdatsion/iavl/pull/304) Empty trees now return hashes rather than `nil` 
+  from e.g. `Hash()`, `WorkingHash()`, and `SaveVersion()`, for conformance with RFC-6962.
+
+## 0.15.0-rc1 (July 30, 2020)
+
+The IAVL project has moved from https://github.com/evdatsion/iavl to
+https://github.com/evdatsion/iavl. This changes the module import path, which is now
+`github.com/evdatsion/iavl`.
+
+Users upgrading from 0.13 should read important upgrade information in the 0.14.0 release below.
+
+### Breaking Changes
+
+- [\#285](https://github.com/evdatsion/iavl/pull/285) The module path has changed from
+  `github.com/evdatsion/iavl` to `github.com/evdatsion/iavl`.
+
+### Improvements
+
+- [\#265](https://github.com/evdatsion/iavl/pull/265) Encoding of tree nodes and proofs is now done 
+  using the Go stdlib and Protobuf instead of Amino. The binary encoding is identical.
+
+- [\#276](https://github.com/evdatsion/iavl/pull/276/files) Introduced
+  `ImmutableTree.GetMembershipProof()` and `GetNonMembershipProof()` to return ics23 ExistenceProof 
+  and NonExistenceProof respectively.
+
+- [\#299](https://github.com/evdatsion/iavl/pull/299) Added `Options.InitialVersion` to specify the 
+  initial version for new IAVL trees.
+
+### Bug Fixes
+
+- [\#288](https://github.com/evdatsion/iavl/pull/288) Fix panics when generating proofs for keys that 
+  are all `0xFF`.
 
 ## 0.14.0 (July 2, 2020)
 
@@ -58,12 +127,12 @@ See important upgrade information for 0.14.0 above.
 
 ### Improvements
 
-- [\#282](https://github.com/cosmos/iavl/pull/282) Add `Repair013Orphans()` to repair faulty 
+- [\#282](https://github.com/evdatsion/iavl/pull/282) Add `Repair013Orphans()` to repair faulty 
   orphans in a database last written to by IAVL 0.13.x
 
 ### Bug Fixes
 
-- [\#281](https://github.com/cosmos/iavl/pull/281) Remove unnecessary Protobuf dependencies
+- [\#281](https://github.com/evdatsion/iavl/pull/281) Remove unnecessary Protobuf dependencies
 
 ## 0.14.0-rc1 (June 24, 2020)
 
@@ -73,26 +142,27 @@ Special thanks to external contributors on this release: @ridenaio
 
 ### Breaking Changes
 
-- [\#274](https://github.com/cosmos/iavl/pull/274) Remove pruning options `KeepEvery` and 
+- [\#274](https://github.com/evdatsion/iavl/pull/274) Remove pruning options `KeepEvery` and 
   `KeepRecent` (see warning above) and the `recentDB` parameter to `NewMutableTreeWithOpts()`.
 
 ### Improvements
 
-- [\#271](https://github.com/cosmos/iavl/pull/271) Add `MutableTree.DeleteVersions()` for deleting 
+- [\#271](https://github.com/evdatsion/iavl/pull/271) Add `MutableTree.DeleteVersions()` for deleting 
   multiple versions
 
-- [\#235](https://github.com/cosmos/iavl/pull/235) Reduce `ImmutableTree.Export()` buffer size from 
+- [\#235](https://github.com/evdatsion/iavl/pull/235) Reduce `ImmutableTree.Export()` buffer size from 
   64 to 32 nodes
 
 ### Bug Fixes
 
-- [\#275](https://github.com/cosmos/iavl/pull/275) Fix data corruption with 
+- [\#275](https://github.com/evdatsion/iavl/pull/275) Fix data corruption with 
   `LoadVersionForOverwriting`
+
 ## 0.13.3 (April 5, 2020)
 
 ### Bug Fixes
 
-- [import] [\#230](https://github.com/tendermint/iavl/pull/230) Set correct version when committing an empty import.
+- [import] [\#230](https://github.com/evdatsion/iavl/pull/230) Set correct version when committing an empty import.
 
 ## 0.13.2 (March 18, 2020)
 
@@ -104,11 +174,11 @@ Special thanks to external contributors on this release: @ridenaio
 
 ### Improvements
 
-- [dep] [\#220](https://github.com/tendermint/iavl/pull/220) Update tm-db to 0.5.0, which includes a new B-tree based MemDB used by IAVL for non-persisted versions.
+- [dep] [\#220](https://github.com/evdatsion/iavl/pull/220) Update tm-db to 0.5.0, which includes a new B-tree based MemDB used by IAVL for non-persisted versions.
 
 ### Bug Fixes
 
-- [nodedb] [\#219](https://github.com/tendermint/iavl/pull/219) Fix a concurrent database access issue when deleting orphans.
+- [nodedb] [\#219](https://github.com/evdatsion/iavl/pull/219) Fix a concurrent database access issue when deleting orphans.
 
 ## 0.13.0 (January 16, 2020)
 
@@ -117,20 +187,20 @@ Special thanks to external contributors on this release:
 
 ### BREAKING CHANGES
 
-- [pruning] [\#158](https://github.com/tendermint/iavl/pull/158) NodeDB constructor must provide `keepRecent` and `keepEvery` fields to define PruningStrategy. All Save functionality must specify whether they should flushToDisk as well using `flushToDisk` boolean argument. All Delete functionality must specify whether object should be deleted from memory only using the `memOnly` boolean argument.
-- [dep] [\#194](https://github.com/tendermint/iavl/pull/194) Update tm-db to 0.4.0 this includes interface breaking to return errors.
+- [pruning] [\#158](https://github.com/evdatsion/iavl/pull/158) NodeDB constructor must provide `keepRecent` and `keepEvery` fields to define PruningStrategy. All Save functionality must specify whether they should flushToDisk as well using `flushToDisk` boolean argument. All Delete functionality must specify whether object should be deleted from memory only using the `memOnly` boolean argument.
+- [dep] [\#194](https://github.com/evdatsion/iavl/pull/194) Update tm-db to 0.4.0 this includes interface breaking to return errors.
 
 ### IMPROVEMENTS
 
 ### Bug Fix
 
-- [orphans] [#177](https://github.com/tendermint/iavl/pull/177) Collect all orphans after remove (@rickyyangz)
+- [orphans] [#177](https://github.com/evdatsion/iavl/pull/177) Collect all orphans after remove (@rickyyangz)
 
 ## 0.12.4 (July 31, 2019)
 
 ### IMPROVEMENTS
 
-- [\#46](https://github.com/tendermint/iavl/issues/46) Removed all instances of cmn (tendermint/tendermint/libs/common)
+- [\#46](https://github.com/evdatsion/iavl/issues/46) Removed all instances of cmn (tendermint/tendermint/libs/common)
 
 ## 0.12.3 (July 12, 2019)
 
@@ -141,7 +211,7 @@ IMPROVEMENTS
 
 - Implement LazyLoadVersion (@alexanderbez)
   LazyLoadVersion attempts to lazy load only the specified target version
-  without loading previous roots/versions. - see [goDoc](https://godoc.org/github.com/tendermint/iavl#MutableTree.LazyLoadVersion)
+  without loading previous roots/versions. - see [goDoc](https://godoc.org/github.com/evdatsion/iavl#MutableTree.LazyLoadVersion)
 - Move to go.mod (@Liamsi)
 - `iaviewer` command to visualize IAVL database from leveldb (@ethanfrey)
 
@@ -149,7 +219,7 @@ IMPROVEMENTS
 
 IMPROVEMENTS
 
-- Use Tendermint v0.30.2 and close batch after write (related pull request in Tendermint: https://github.com/tendermint/tendermint/pull/3397)
+- Use Tendermint v0.30.2 and close batch after write (related pull request in Tendermint: https://github.com/evdatsion/tendermint/pull/3397)
 
 ## 0.12.1 (February 12, 2019)
 
@@ -161,7 +231,7 @@ IMPROVEMENTS
 
 BREAKING CHANGES
 
-- Uses new Tendermint ReverseIterator API. See https://github.com/tendermint/tendermint/pull/2913
+- Uses new Tendermint ReverseIterator API. See https://github.com/evdatsion/tendermint/pull/2913
 
 ## 0.11.1 (October 29, 2018)
 
@@ -180,9 +250,9 @@ IMPROVEMENTS
 
 - Database key format avoids use of fmt.Sprintf fmt.Sscanf leading to ~10% speedup in benchmark BenchmarkTreeLoadAndDelete ([#107], thanks to [@silasdavis])
 
-[#107]: https://github.com/tendermint/iavl/pull/107
+[#107]: https://github.com/evdatsion/iavl/pull/107
 [@silasdavis]: https://github.com/silasdavis
-[#96]: https://github.com/tendermint/iavl/pull/96
+[#96]: https://github.com/evdatsion/iavl/pull/96
 
 ## 0.10.0
 
@@ -193,8 +263,8 @@ BREAKING CHANGES
   - load read-only snapshots at previous versions on demand
   - load mutable trees at the most recently saved tree
 
-[1]: https://github.com/tendermint/iavl/blob/9e62436856efa94c1223043be36ebda01ae0b6fc/mutable_tree.go#L14-L21
-[2]: https://github.com/tendermint/iavl/blob/9e62436856efa94c1223043be36ebda01ae0b6fc/immutable_tree.go#L10-L17
+[1]: https://github.com/evdatsion/iavl/blob/9e62436856efa94c1223043be36ebda01ae0b6fc/mutable_tree.go#L14-L21
+[2]: https://github.com/evdatsion/iavl/blob/9e62436856efa94c1223043be36ebda01ae0b6fc/immutable_tree.go#L10-L17
 
 BUG FIXES
 

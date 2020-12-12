@@ -10,7 +10,7 @@ import (
 	"sync"
 
 	"github.com/pkg/errors"
-	dbm "github.com/tendermint/tm-db"
+	dbm "github.com/evdatsion/tm-db"
 )
 
 const (
@@ -38,7 +38,7 @@ type nodeDB struct {
 	mtx            sync.Mutex       // Read/write lock.
 	db             dbm.DB           // Persistent node storage.
 	batch          dbm.Batch        // Batched writing buffer.
-	opts           *Options         // Options to customize for pruning/writing
+	opts           Options          // Options to customize for pruning/writing
 	versionReaders map[int64]uint32 // Number of active version readers
 
 	latestVersion  int64
@@ -49,12 +49,13 @@ type nodeDB struct {
 
 func newNodeDB(db dbm.DB, cacheSize int, opts *Options) *nodeDB {
 	if opts == nil {
-		opts = DefaultOptions()
+		o := DefaultOptions()
+		opts = &o
 	}
 	return &nodeDB{
 		db:             db,
 		batch:          db.NewBatch(),
-		opts:           opts,
+		opts:           *opts,
 		latestVersion:  0, // initially invalid
 		nodeCache:      make(map[string]*list.Element),
 		nodeCacheSize:  cacheSize,
@@ -237,7 +238,62 @@ func (ndb *nodeDB) DeleteVersionsFrom(version int64) error {
 	})
 
 	// Finally, delete the version root entries
-	ndb.traverseRange(rootKeyFormat.Key(version), rootKeyFormat.Key(math.MaxInt64), func(k, v []byte) {
+	ndb.traverseRange(rootKeyFormat.Key(version), rootKeyFormat.Key(int64(math.MaxInt64)), func(k, v []byte) {
+		if err := ndb.batch.Delete(k); err != nil {
+			panic(err)
+		}
+	})
+
+	return nil
+}
+
+// DeleteVersionsRange deletes versions from an interval (not inclusive).
+func (ndb *nodeDB) DeleteVersionsRange(fromVersion, toVersion int64) error {
+	if fromVersion >= toVersion {
+		return errors.New("toVersion must be greater than fromVersion")
+	}
+	if toVersion == 0 {
+		return errors.New("toVersion must be greater than 0")
+	}
+
+	ndb.mtx.Lock()
+	defer ndb.mtx.Unlock()
+
+	latest := ndb.getLatestVersion()
+	if latest < toVersion {
+		return errors.Errorf("cannot delete latest saved version (%d)", latest)
+	}
+
+	predecessor := ndb.getPreviousVersion(fromVersion)
+
+	for v, r := range ndb.versionReaders {
+		if v < toVersion && v > predecessor && r != 0 {
+			return errors.Errorf("unable to delete version %v with %v active readers", v, r)
+		}
+	}
+
+	// If the predecessor is earlier than the beginning of the lifetime, we can delete the orphan.
+	// Otherwise, we shorten its lifetime, by moving its endpoint to the predecessor version.
+	for version := fromVersion; version < toVersion; version++ {
+		ndb.traverseOrphansVersion(version, func(key, hash []byte) {
+			var from, to int64
+			orphanKeyFormat.Scan(key, &to, &from)
+			if err := ndb.batch.Delete(key); err != nil {
+				panic(err)
+			}
+			if from > predecessor {
+				if err := ndb.batch.Delete(ndb.nodeKey(hash)); err != nil {
+					panic(err)
+				}
+				ndb.uncacheNode(hash)
+			} else {
+				ndb.saveOrphan(hash, from, predecessor)
+			}
+		})
+	}
+
+	// Delete the version root entries
+	ndb.traverseRange(rootKeyFormat.Key(fromVersion), rootKeyFormat.Key(toVersion), func(k, v []byte) {
 		if err := ndb.batch.Delete(k); err != nil {
 			panic(err)
 		}
@@ -520,8 +576,10 @@ func (ndb *nodeDB) saveRoot(hash []byte, version int64) error {
 	ndb.mtx.Lock()
 	defer ndb.mtx.Unlock()
 
-	if version != ndb.getLatestVersion()+1 {
-		return fmt.Errorf("must save consecutive versions; expected %d, got %d", ndb.getLatestVersion()+1, version)
+	// We allow the initial version to be arbitrary
+	latest := ndb.getLatestVersion()
+	if latest > 0 && version != latest+1 {
+		return fmt.Errorf("must save consecutive versions; expected %d, got %d", latest+1, version)
 	}
 
 	if err := ndb.batch.Set(ndb.rootKey(version), hash); err != nil {
@@ -547,7 +605,7 @@ func (ndb *nodeDB) decrVersionReaders(version int64) {
 	}
 }
 
-////////////////// Utility and test functions /////////////////////////////////
+// Utility and test functions
 
 func (ndb *nodeDB) leafNodes() []*Node {
 	leaves := []*Node{}

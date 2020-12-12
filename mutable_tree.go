@@ -2,12 +2,13 @@ package iavl
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"fmt"
 	"sort"
 
 	"github.com/pkg/errors"
 
-	dbm "github.com/tendermint/tm-db"
+	dbm "github.com/evdatsion/tm-db"
 )
 
 // ErrVersionDoesNotExist is returned if a requested version does not exist.
@@ -74,10 +75,7 @@ func (tree *MutableTree) AvailableVersions() []int {
 // Hash returns the hash of the latest saved version of the tree, as returned
 // by SaveVersion. If no versions have been saved, Hash returns nil.
 func (tree *MutableTree) Hash() []byte {
-	if tree.version > 0 {
-		return tree.lastSaved.Hash()
-	}
-	return nil
+	return tree.lastSaved.Hash()
 }
 
 // WorkingHash returns the hash of the current working tree.
@@ -286,7 +284,10 @@ func (tree *MutableTree) LazyLoadVersion(targetVersion int64) (int64, error) {
 
 	// no versions have been saved if the latest version is non-positive
 	if latestVersion <= 0 {
-		return 0, nil
+		if targetVersion <= 0 {
+			return 0, nil
+		}
+		return 0, fmt.Errorf("no versions found while trying to load %v", targetVersion)
 	}
 
 	// default to the latest version if the targeted version is non-positive
@@ -325,9 +326,13 @@ func (tree *MutableTree) LoadVersion(targetVersion int64) (int64, error) {
 	}
 
 	if len(roots) == 0 {
-		return 0, nil
+		if targetVersion <= 0 {
+			return 0, nil
+		}
+		return 0, fmt.Errorf("no versions found while trying to load %v", targetVersion)
 	}
 
+	firstVersion := int64(0)
 	latestVersion := int64(0)
 
 	var latestRoot []byte
@@ -337,11 +342,19 @@ func (tree *MutableTree) LoadVersion(targetVersion int64) (int64, error) {
 			latestVersion = version
 			latestRoot = r
 		}
+		if firstVersion == 0 || version < firstVersion {
+			firstVersion = version
+		}
 	}
 
 	if !(targetVersion == 0 || latestVersion == targetVersion) {
 		return latestVersion, fmt.Errorf("wanted to load target %v but only found up to %v",
 			targetVersion, latestVersion)
+	}
+
+	if firstVersion > 0 && firstVersion < int64(tree.ndb.opts.InitialVersion) {
+		return latestVersion, fmt.Errorf("initial version set to %v, but found earlier version %v",
+			tree.ndb.opts.InitialVersion, firstVersion)
 	}
 
 	t := &ImmutableTree{
@@ -439,6 +452,9 @@ func (tree *MutableTree) GetVersioned(key []byte, version int64) (
 // the tree. Returns the hash and new version number.
 func (tree *MutableTree) SaveVersion() ([]byte, int64, error) {
 	version := tree.version + 1
+	if version == 1 && tree.ndb.opts.InitialVersion > 0 {
+		version = int64(tree.ndb.opts.InitialVersion)
+	}
 
 	if tree.versions[version] {
 		// If the version already exists, return an error as we're attempting to overwrite.
@@ -446,6 +462,12 @@ func (tree *MutableTree) SaveVersion() ([]byte, int64, error) {
 		existingHash, err := tree.ndb.getRoot(version)
 		if err != nil {
 			return nil, version, err
+		}
+
+		// If the existing root hash is empty (because the tree is empty), then we need to
+		// compare with the hash of an empty input which is what `WorkingHash()` returns.
+		if len(existingHash) == 0 {
+			existingHash = sha256.New().Sum(nil)
 		}
 
 		var newHash = tree.WorkingHash()
@@ -511,23 +533,58 @@ func (tree *MutableTree) deleteVersion(version int64) error {
 	return nil
 }
 
-// DeleteVersions deletes a series of versions from the MutableTree. An error
-// is returned if any single version is invalid or the delete fails. All writes
-// happen in a single batch with a single commit.
+// SetInitialVersion sets the initial version of the tree, replacing Options.InitialVersion.
+// It is only used during the initial SaveVersion() call for a tree with no other versions,
+// and is otherwise ignored.
+func (tree *MutableTree) SetInitialVersion(version uint64) {
+	tree.ndb.opts.InitialVersion = version
+}
+
+// DeleteVersions deletes a series of versions from the MutableTree.
+// Deprecated: please use DeleteVersionsRange instead.
 func (tree *MutableTree) DeleteVersions(versions ...int64) error {
 	debug("DELETING VERSIONS: %v\n", versions)
 
+	if len(versions) == 0 {
+		return nil
+	}
+
+	sort.Slice(versions, func(i, j int) bool {
+		return versions[i] < versions[j]
+	})
+
+	// Find ordered data and delete by interval
+	intervals := map[int64]int64{}
+	var fromVersion int64
 	for _, version := range versions {
-		if err := tree.deleteVersion(version); err != nil {
+		if version-fromVersion != intervals[fromVersion] {
+			fromVersion = version
+		}
+		intervals[fromVersion]++
+	}
+
+	for fromVersion, sortedBatchSize := range intervals {
+		if err := tree.DeleteVersionsRange(fromVersion, fromVersion+sortedBatchSize); err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+// DeleteVersionsRange removes versions from an interval from the MutableTree (not inclusive).
+// An error is returned if any single version has active readers.
+// All writes happen in a single batch with a single commit.
+func (tree *MutableTree) DeleteVersionsRange(fromVersion, toVersion int64) error {
+	if err := tree.ndb.DeleteVersionsRange(fromVersion, toVersion); err != nil {
+		return err
 	}
 
 	if err := tree.ndb.Commit(); err != nil {
 		return err
 	}
 
-	for _, version := range versions {
+	for version := fromVersion; version < toVersion; version++ {
 		delete(tree.versions, version)
 	}
 

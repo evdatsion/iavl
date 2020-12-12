@@ -6,8 +6,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/cosmos/iavl"
-	tmdb "github.com/tendermint/tm-db"
+	"github.com/evdatsion/iavl"
+	tmdb "github.com/evdatsion/tm-db"
 )
 
 // stores is the list of stores in the CosmosHub database

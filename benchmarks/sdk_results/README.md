@@ -10,7 +10,7 @@ max_mem - maximum memory usage during simulation
 ## Steps to reproduce the results
 
 1. SSH into the machine you want to run the simulation and clone the Cosmos SDK
-`git clone http://github.com/cosmos/cosmos-sdk`
+`git clone http://github.com/evdatsion/cosmos-sdk`
 
 2. Checkout the tim/pruning-test branch
 `git checkout tim/pruning-test`

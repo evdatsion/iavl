@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"fmt"
 	"runtime"
+	"strconv"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	db "github.com/tendermint/tm-db"
+	db "github.com/evdatsion/tm-db"
 )
 
 func TestDelete(t *testing.T) {
@@ -103,6 +105,170 @@ func TestMutableTree_DeleteVersions(t *testing.T) {
 			require.Equal(t, e.value, val)
 		}
 	}
+}
+
+func TestMutableTree_LoadVersion_Empty(t *testing.T) {
+	memDB := db.NewMemDB()
+	tree, err := NewMutableTree(memDB, 0)
+	require.NoError(t, err)
+
+	version, err := tree.LoadVersion(0)
+	require.NoError(t, err)
+	assert.EqualValues(t, 0, version)
+
+	version, err = tree.LoadVersion(-1)
+	require.NoError(t, err)
+	assert.EqualValues(t, 0, version)
+
+	_, err = tree.LoadVersion(3)
+	require.Error(t, err)
+}
+
+func TestMutableTree_LazyLoadVersion_Empty(t *testing.T) {
+	memDB := db.NewMemDB()
+	tree, err := NewMutableTree(memDB, 0)
+	require.NoError(t, err)
+
+	version, err := tree.LazyLoadVersion(0)
+	require.NoError(t, err)
+	assert.EqualValues(t, 0, version)
+
+	version, err = tree.LazyLoadVersion(-1)
+	require.NoError(t, err)
+	assert.EqualValues(t, 0, version)
+
+	_, err = tree.LazyLoadVersion(3)
+	require.Error(t, err)
+}
+
+func TestMutableTree_DeleteVersionsRange(t *testing.T) {
+	require := require.New(t)
+
+	mdb := db.NewMemDB()
+	tree, err := NewMutableTree(mdb, 0)
+	require.NoError(err)
+
+	const maxLength = 100
+	const fromLength = 10
+
+	versions := make([]int64, 0, maxLength)
+	for count := 1; count <= maxLength; count++ {
+		versions = append(versions, int64(count))
+		countStr := strconv.Itoa(count)
+		// Set kv pair and save version
+		tree.Set([]byte("aaa"), []byte("bbb"))
+		tree.Set([]byte("key"+countStr), []byte("value"+countStr))
+		_, _, err = tree.SaveVersion()
+		require.NoError(err, "SaveVersion should not fail")
+	}
+
+	tree, err = NewMutableTree(mdb, 0)
+	require.NoError(err)
+	targetVersion, err := tree.LoadVersion(int64(maxLength))
+	require.NoError(err)
+	require.Equal(targetVersion, int64(maxLength), "targetVersion shouldn't larger than the actual tree latest version")
+
+	err = tree.DeleteVersionsRange(fromLength, int64(maxLength/2))
+	require.NoError(err, "DeleteVersionsTo should not fail")
+
+	for _, version := range versions[:fromLength-1] {
+		require.True(tree.versions[version], "versions %d no more than 10 should exist", version)
+
+		v, err := tree.LazyLoadVersion(version)
+		require.NoError(err, version)
+		require.Equal(v, version)
+
+		_, value := tree.Get([]byte("aaa"))
+		require.Equal(string(value), "bbb")
+
+		for _, count := range versions[:version] {
+			countStr := strconv.Itoa(int(count))
+			_, value := tree.Get([]byte("key" + countStr))
+			require.Equal(string(value), "value"+countStr)
+		}
+	}
+
+	for _, version := range versions[fromLength : int64(maxLength/2)-1] {
+		require.False(tree.versions[version], "versions %d more 10 and no more than 50 should have been deleted", version)
+
+		_, err := tree.LazyLoadVersion(version)
+		require.Error(err)
+	}
+
+	for _, version := range versions[int64(maxLength/2)-1:] {
+		require.True(tree.versions[version], "versions %d more than 50 should exist", version)
+
+		v, err := tree.LazyLoadVersion(version)
+		require.NoError(err)
+		require.Equal(v, version)
+
+		_, value := tree.Get([]byte("aaa"))
+		require.Equal(string(value), "bbb")
+
+		for _, count := range versions[:fromLength] {
+			countStr := strconv.Itoa(int(count))
+			_, value := tree.Get([]byte("key" + countStr))
+			require.Equal(string(value), "value"+countStr)
+		}
+		for _, count := range versions[int64(maxLength/2)-1 : version] {
+			countStr := strconv.Itoa(int(count))
+			_, value := tree.Get([]byte("key" + countStr))
+			require.Equal(string(value), "value"+countStr)
+		}
+	}
+}
+
+func TestMutableTree_InitialVersion(t *testing.T) {
+	memDB := db.NewMemDB()
+	tree, err := NewMutableTreeWithOpts(memDB, 0, &Options{InitialVersion: 9})
+	require.NoError(t, err)
+
+	tree.Set([]byte("a"), []byte{0x01})
+	_, version, err := tree.SaveVersion()
+	require.NoError(t, err)
+	assert.EqualValues(t, 9, version)
+
+	tree.Set([]byte("b"), []byte{0x02})
+	_, version, err = tree.SaveVersion()
+	require.NoError(t, err)
+	assert.EqualValues(t, 10, version)
+
+	// Reloading the tree with the same initial version is fine
+	tree, err = NewMutableTreeWithOpts(memDB, 0, &Options{InitialVersion: 9})
+	require.NoError(t, err)
+	version, err = tree.Load()
+	require.NoError(t, err)
+	assert.EqualValues(t, 10, version)
+
+	// Reloading the tree with an initial version beyond the lowest should error
+	tree, err = NewMutableTreeWithOpts(memDB, 0, &Options{InitialVersion: 10})
+	require.NoError(t, err)
+	_, err = tree.Load()
+	require.Error(t, err)
+
+	// Reloading the tree with a lower initial version is fine, and new versions can be produced
+	tree, err = NewMutableTreeWithOpts(memDB, 0, &Options{InitialVersion: 3})
+	require.NoError(t, err)
+	version, err = tree.Load()
+	require.NoError(t, err)
+	assert.EqualValues(t, 10, version)
+
+	tree.Set([]byte("c"), []byte{0x03})
+	_, version, err = tree.SaveVersion()
+	require.NoError(t, err)
+	assert.EqualValues(t, 11, version)
+}
+
+func TestMutableTree_SetInitialVersion(t *testing.T) {
+	memDB := db.NewMemDB()
+	tree, err := NewMutableTree(memDB, 0)
+	require.NoError(t, err)
+	tree.SetInitialVersion(9)
+
+	tree.Set([]byte("a"), []byte{0x01})
+	_, version, err := tree.SaveVersion()
+	require.NoError(t, err)
+	assert.EqualValues(t, 9, version)
 }
 
 func BenchmarkMutableTree_Set(b *testing.B) {

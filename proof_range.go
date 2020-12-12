@@ -9,7 +9,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	iavlproto "github.com/cosmos/iavl/internal/proto"
+	iavlproto "github.com/evdatsion/iavl/proto"
 )
 
 type RangeProof struct {
@@ -307,7 +307,7 @@ func (proof *RangeProof) _computeRootHash() (rootHash []byte, treeEnd bool, err 
 }
 
 // toProto converts the proof to a Protobuf representation, for use in ValueOp and AbsenceOp.
-func (proof *RangeProof) toProto() *iavlproto.RangeProof {
+func (proof *RangeProof) ToProto() *iavlproto.RangeProof {
 	pb := &iavlproto.RangeProof{
 		LeftPath:   make([]*iavlproto.ProofInnerNode, 0, len(proof.LeftPath)),
 		InnerNodes: make([]*iavlproto.PathToLeaf, 0, len(proof.InnerNodes)),
@@ -331,7 +331,7 @@ func (proof *RangeProof) toProto() *iavlproto.RangeProof {
 }
 
 // rangeProofFromProto generates a RangeProof from a Protobuf RangeProof.
-func rangeProofFromProto(pbProof *iavlproto.RangeProof) (RangeProof, error) {
+func RangeProofFromProto(pbProof *iavlproto.RangeProof) (RangeProof, error) {
 	proof := RangeProof{}
 
 	for _, pbInner := range pbProof.LeftPath {
@@ -365,8 +365,6 @@ func rangeProofFromProto(pbProof *iavlproto.RangeProof) (RangeProof, error) {
 	}
 	return proof, nil
 }
-
-///////////////////////////////////////////////////////////////////////////////
 
 // keyStart is inclusive and keyEnd is exclusive.
 // If keyStart or keyEnd don't exist, the leaf before keyStart

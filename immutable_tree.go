@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	dbm "github.com/tendermint/tm-db"
+	dbm "github.com/evdatsion/tm-db"
 )
 
 // ImmutableTree contains the immutable tree at a given version. It is typically created by calling
@@ -127,18 +127,12 @@ func (t *ImmutableTree) Has(key []byte) bool {
 
 // Hash returns the root hash.
 func (t *ImmutableTree) Hash() []byte {
-	if t.root == nil {
-		return nil
-	}
 	hash, _ := t.root.hashWithCount()
 	return hash
 }
 
 // hashWithCount returns the root hash and hash count.
 func (t *ImmutableTree) hashWithCount() ([]byte, int64) {
-	if t.root == nil {
-		return nil, 0
-	}
 	return t.root.hashWithCount()
 }
 
