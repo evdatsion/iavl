@@ -41,25 +41,23 @@ func main() {
 		os.Exit(1)
 	}
 
-	switch args[0] {
-	case "data":
+	if args[0] == "data" {
 		PrintKeys(tree)
 		fmt.Printf("Hash: %X\n", tree.Hash())
 		fmt.Printf("Size: %X\n", tree.Size())
-	case "shape":
+	} else if args[0] == "shape" {
 		PrintShape(tree)
-	case "versions":
+	} else if args[0] == "versions" {
 		PrintVersions(tree)
 	}
 }
 
-func OpenDB(dir string) (dbm.DB, error) {
-	switch {
-	case strings.HasSuffix(dir, ".db"):
+func OpenDb(dir string) (dbm.DB, error) {
+	if strings.HasSuffix(dir, ".db") {
 		dir = dir[:len(dir)-3]
-	case strings.HasSuffix(dir, ".db/"):
+	} else if strings.HasSuffix(dir, ".db/") {
 		dir = dir[:len(dir)-4]
-	default:
+	} else {
 		return nil, fmt.Errorf("database directory must end with .db")
 	}
 	// TODO: doesn't work on windows!
@@ -75,24 +73,16 @@ func OpenDB(dir string) (dbm.DB, error) {
 	return db, nil
 }
 
-// nolint: unused,deadcode
-func PrintDBStats(db dbm.DB) {
+func PrintDbStats(db dbm.DB) {
 	count := 0
 	prefix := map[string]int{}
-	itr, err := db.Iterator(nil, nil)
-	if err != nil {
-		panic(err)
-	}
-
-	defer itr.Close()
-	for ; itr.Valid(); itr.Next() {
-		key := string(itr.Key()[:1])
-		prefix[key]++
+	iter := db.Iterator(nil, nil)
+	for ; iter.Valid(); iter.Next() {
+		key := string(iter.Key()[:1])
+		prefix[key] = prefix[key] + 1
 		count++
 	}
-	if err := itr.Error(); err != nil {
-		panic(err)
-	}
+	iter.Close()
 	fmt.Printf("DB contains %d entries\n", count)
 	for k, v := range prefix {
 		fmt.Printf("  %s: %d\n", k, v)
@@ -102,14 +92,11 @@ func PrintDBStats(db dbm.DB) {
 // ReadTree loads an iavl tree from the directory
 // If version is 0, load latest, otherwise, load named version
 func ReadTree(dir string, version int) (*iavl.MutableTree, error) {
-	db, err := OpenDB(dir)
+	db, err := OpenDb(dir)
 	if err != nil {
 		return nil, err
 	}
-	tree, err := iavl.NewMutableTree(db, DefaultCacheSize)
-	if err != nil {
-		return nil, err
-	}
+	tree := iavl.NewMutableTree(db, DefaultCacheSize)
 	ver, err := tree.LoadVersion(int64(version))
 	fmt.Printf("Got version: %d\n", ver)
 	return tree, err
@@ -130,15 +117,15 @@ func PrintKeys(tree *iavl.MutableTree) {
 func parseWeaveKey(key []byte) string {
 	cut := bytes.IndexRune(key, ':')
 	if cut == -1 {
-		return encodeID(key)
+		return encodeId(key)
 	}
 	prefix := key[:cut]
 	id := key[cut+1:]
-	return fmt.Sprintf("%s:%s", encodeID(prefix), encodeID(id))
+	return fmt.Sprintf("%s:%s", encodeId(prefix), encodeId(id))
 }
 
 // casts to a string if it is printable ascii, hex-encodes otherwise
-func encodeID(id []byte) string {
+func encodeId(id []byte) string {
 	for _, b := range id {
 		if b < 0x20 || b >= 0x80 {
 			return strings.ToUpper(hex.EncodeToString(id))

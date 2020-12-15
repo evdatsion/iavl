@@ -3,12 +3,9 @@ package iavl
 import (
 	"fmt"
 
-	proto "github.com/gogo/protobuf/proto"
 	"github.com/pkg/errors"
-	"github.com/evdatsion/tendermint/crypto/merkle"
-	tmmerkle "github.com/evdatsion/tendermint/proto/tendermint/crypto"
 
-	iavlproto "github.com/evdatsion/iavl/proto"
+	"github.com/evdatsion/tendermint/crypto/merkle"
 )
 
 const ProofOpIAVLAbsence = "iavl:a"
@@ -17,7 +14,7 @@ const ProofOpIAVLAbsence = "iavl:a"
 //
 // If the produced root hash matches the expected hash, the proof
 // is good.
-type AbsenceOp struct {
+type IAVLAbsenceOp struct {
 	// Encoded in ProofOp.Key.
 	key []byte
 
@@ -27,62 +24,41 @@ type AbsenceOp struct {
 	Proof *RangeProof `json:"proof"`
 }
 
-var _ merkle.ProofOperator = AbsenceOp{}
+var _ merkle.ProofOperator = IAVLAbsenceOp{}
 
-func NewAbsenceOp(key []byte, proof *RangeProof) AbsenceOp {
-	return AbsenceOp{
+func NewIAVLAbsenceOp(key []byte, proof *RangeProof) IAVLAbsenceOp {
+	return IAVLAbsenceOp{
 		key:   key,
 		Proof: proof,
 	}
 }
 
-func AbsenceOpDecoder(pop tmmerkle.ProofOp) (merkle.ProofOperator, error) {
+func IAVLAbsenceOpDecoder(pop merkle.ProofOp) (merkle.ProofOperator, error) {
 	if pop.Type != ProofOpIAVLAbsence {
 		return nil, errors.Errorf("unexpected ProofOp.Type; got %v, want %v", pop.Type, ProofOpIAVLAbsence)
 	}
-	// Strip the varint length prefix, used for backwards compatibility with Amino.
-	bz, n, err := decodeBytes(pop.Data)
+	var op IAVLAbsenceOp // a bit strange as we'll discard this, but it works.
+	err := cdc.UnmarshalBinaryLengthPrefixed(pop.Data, &op)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "decoding ProofOp.Data into IAVLAbsenceOp")
 	}
-	if n != len(pop.Data) {
-		return nil, fmt.Errorf("unexpected bytes, expected %v got %v", n, len(pop.Data))
-	}
-	pbProofOp := &iavlproto.AbsenceOp{}
-	err = proto.Unmarshal(bz, pbProofOp)
-	if err != nil {
-		return nil, err
-	}
-	proof, err := RangeProofFromProto(pbProofOp.Proof)
-	if err != nil {
-		return nil, err
-	}
-	return NewAbsenceOp(pop.Key, &proof), nil
+	return NewIAVLAbsenceOp(pop.Key, op.Proof), nil
 }
 
-func (op AbsenceOp) ProofOp() tmmerkle.ProofOp {
-	pbProof := iavlproto.AbsenceOp{Proof: op.Proof.ToProto()}
-	bz, err := proto.Marshal(&pbProof)
-	if err != nil {
-		panic(err)
-	}
-	// We length-prefix the byte slice to retain backwards compatibility with the Amino proofs.
-	bz, err = encodeBytesSlice(bz)
-	if err != nil {
-		panic(err)
-	}
-	return tmmerkle.ProofOp{
+func (op IAVLAbsenceOp) ProofOp() merkle.ProofOp {
+	bz := cdc.MustMarshalBinaryLengthPrefixed(op)
+	return merkle.ProofOp{
 		Type: ProofOpIAVLAbsence,
 		Key:  op.key,
 		Data: bz,
 	}
 }
 
-func (op AbsenceOp) String() string {
+func (op IAVLAbsenceOp) String() string {
 	return fmt.Sprintf("IAVLAbsenceOp{%v}", op.GetKey())
 }
 
-func (op AbsenceOp) Run(args [][]byte) ([][]byte, error) {
+func (op IAVLAbsenceOp) Run(args [][]byte) ([][]byte, error) {
 	if len(args) != 0 {
 		return nil, errors.Errorf("expected 0 args, got %v", len(args))
 	}
@@ -100,13 +76,13 @@ func (op AbsenceOp) Run(args [][]byte) ([][]byte, error) {
 	// XXX What is the encoding for keys?
 	// We should decode the key depending on whether it's a string or hex,
 	// maybe based on quotes and 0x prefix?
-	err = op.Proof.VerifyAbsence(op.key)
+	err = op.Proof.VerifyAbsence([]byte(op.key))
 	if err != nil {
 		return nil, errors.Wrap(err, "verifying absence")
 	}
 	return [][]byte{root}, nil
 }
 
-func (op AbsenceOp) GetKey() []byte {
+func (op IAVLAbsenceOp) GetKey() []byte {
 	return op.key
 }

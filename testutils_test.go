@@ -1,4 +1,3 @@
-// nolint:errcheck
 package iavl
 
 import (
@@ -9,8 +8,8 @@ import (
 
 	mrand "math/rand"
 
+	"github.com/evdatsion/go-amino"
 	cmn "github.com/evdatsion/iavl/common"
-	"github.com/stretchr/testify/require"
 	db "github.com/evdatsion/tm-db"
 )
 
@@ -20,21 +19,13 @@ func randstr(length int) string {
 
 func i2b(i int) []byte {
 	buf := new(bytes.Buffer)
-	encodeVarint(buf, int64(i))
+	amino.EncodeInt32(buf, int32(i))
 	return buf.Bytes()
 }
 
 func b2i(bz []byte) int {
-	i, _, err := decodeVarint(bz)
-	if err != nil {
-		panic(err)
-	}
+	i, _, _ := amino.DecodeInt32(bz)
 	return int(i)
-}
-
-// Construct a MutableTree
-func getTestTree(cacheSize int) (*MutableTree, error) {
-	return NewMutableTreeWithOpts(db.NewMemDB(), cacheSize, nil)
 }
 
 // Convenience for a new node
@@ -63,7 +54,8 @@ func N(l, r interface{}) *Node {
 
 // Setup a deep node
 func T(n *Node) *MutableTree {
-	t, _ := getTestTree(0)
+	d := db.NewDB("test", db.MemDBBackend, "")
+	t := NewMutableTree(d, 0)
 
 	n.hashWithCount()
 	t.root = n
@@ -115,8 +107,7 @@ func expectTraverse(t *testing.T, trav traverser, start, end string, count int) 
 }
 
 func BenchmarkImmutableAvlTreeMemDB(b *testing.B) {
-	db, err := db.NewDB("test", db.MemDBBackend, "")
-	require.NoError(b, err)
+	db := db.NewDB("test", db.MemDBBackend, "")
 	benchmarkImmutableAvlTreeWithDB(b, db)
 }
 
@@ -125,9 +116,7 @@ func benchmarkImmutableAvlTreeWithDB(b *testing.B, db db.DB) {
 
 	b.StopTimer()
 
-	t, err := NewMutableTree(db, 100000)
-	require.NoError(b, err)
-
+	t := NewMutableTree(db, 100000)
 	value := []byte{}
 	for i := 0; i < 1000000; i++ {
 		t.Set(i2b(int(cmn.RandInt31())), value)

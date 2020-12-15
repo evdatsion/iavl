@@ -11,6 +11,7 @@ Once this is merged into the offical repo, master, you should be able to do:
 ```shell
 go get github.com/evdatsion/iavl
 cd ${GOPATH}/src/github.com/evdatsion/iavl
+make get_vendor_deps
 make install
 ```
 

@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# This runs benchmarks, by default from master branch of
+# This runs benchmarks, by default from develop branch of
 # github.com/evdatsion/iavl
 # You can customize this by optional command line args
 #
@@ -8,7 +8,7 @@
 #
 # set repouser as your username to time your fork
 
-BRANCH=${1:-master}
+BRANCH=${1:-develop}
 REPOUSER=${2:-tendermint}
 
 export PATH=$PATH:/usr/local/go/bin
@@ -19,5 +19,6 @@ go get -u github.com/${REPOUSER}/iavl
 cd ~/go/src/github.com/${REPOUSER}/iavl
 git checkout ${BRANCH}
 
+make get_vendor_deps
 make bench > results.txt
 

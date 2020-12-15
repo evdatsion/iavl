@@ -7,12 +7,9 @@ import (
 	dbm "github.com/evdatsion/tm-db"
 )
 
-// ImmutableTree contains the immutable tree at a given version. It is typically created by calling
-// MutableTree.GetImmutable(), in which case the returned tree is safe for concurrent access as
-// long as the version is not deleted via DeleteVersion() or the tree's pruning settings.
-//
-// Returned key/value byte slices must not be modified, since they may point to data located inside
-// IAVL which would also be modified.
+// ImmutableTree is a container for an immutable AVL+ ImmutableTree. Changes are performed by
+// swapping the internal root with a new one, while the container is mutable.
+// Note that this tree is not thread-safe.
 type ImmutableTree struct {
 	root    *Node
 	ndb     *nodeDB
@@ -27,15 +24,7 @@ func NewImmutableTree(db dbm.DB, cacheSize int) *ImmutableTree {
 	}
 	return &ImmutableTree{
 		// NodeDB-backed Tree.
-		ndb: newNodeDB(db, cacheSize, nil),
-	}
-}
-
-// NewImmutableTreeWithOpts creates an ImmutableTree with the given options.
-func NewImmutableTreeWithOpts(db dbm.DB, cacheSize int, opts *Options) *ImmutableTree {
-	return &ImmutableTree{
-		// NodeDB-backed Tree.
-		ndb: newNodeDB(db, cacheSize, opts),
+		ndb: newNodeDB(db, cacheSize),
 	}
 }
 
@@ -127,24 +116,23 @@ func (t *ImmutableTree) Has(key []byte) bool {
 
 // Hash returns the root hash.
 func (t *ImmutableTree) Hash() []byte {
+	if t.root == nil {
+		return nil
+	}
 	hash, _ := t.root.hashWithCount()
 	return hash
 }
 
 // hashWithCount returns the root hash and hash count.
 func (t *ImmutableTree) hashWithCount() ([]byte, int64) {
+	if t.root == nil {
+		return nil, 0
+	}
 	return t.root.hashWithCount()
 }
 
-// Export returns an iterator that exports tree nodes as ExportNodes. These nodes can be
-// imported with MutableTree.Import() to recreate an identical tree.
-func (t *ImmutableTree) Export() *Exporter {
-	return newExporter(t)
-}
-
-// Get returns the index and value of the specified key if it exists, or nil and the next index
-// otherwise. The returned value must not be modified, since it may point to data stored within
-// IAVL.
+// Get returns the index and value of the specified key if it exists, or nil
+// and the next index, if it doesn't.
 func (t *ImmutableTree) Get(key []byte) (index int64, value []byte) {
 	if t.root == nil {
 		return 0, nil
@@ -160,8 +148,7 @@ func (t *ImmutableTree) GetByIndex(index int64) (key []byte, value []byte) {
 	return t.root.getByIndex(t, index)
 }
 
-// Iterate iterates over all keys of the tree, in order. The keys and values must not be modified,
-// since they may point to data stored within IAVL.
+// Iterate iterates over all keys of the tree, in order.
 func (t *ImmutableTree) Iterate(fn func(key []byte, value []byte) bool) (stopped bool) {
 	if t.root == nil {
 		return false
@@ -175,13 +162,12 @@ func (t *ImmutableTree) Iterate(fn func(key []byte, value []byte) bool) (stopped
 }
 
 // IterateRange makes a callback for all nodes with key between start and end non-inclusive.
-// If either are nil, then it is open on that side (nil, nil is the same as Iterate). The keys and
-// values must not be modified, since they may point to data stored within IAVL.
+// If either are nil, then it is open on that side (nil, nil is the same as Iterate)
 func (t *ImmutableTree) IterateRange(start, end []byte, ascending bool, fn func(key []byte, value []byte) bool) (stopped bool) {
 	if t.root == nil {
 		return false
 	}
-	return t.root.traverseInRange(t, start, end, ascending, false, 0, false, func(node *Node, _ uint8) bool {
+	return t.root.traverseInRange(t, start, end, ascending, false, 0, func(node *Node, _ uint8) bool {
 		if node.height == 0 {
 			return fn(node.key, node.value)
 		}
@@ -190,13 +176,12 @@ func (t *ImmutableTree) IterateRange(start, end []byte, ascending bool, fn func(
 }
 
 // IterateRangeInclusive makes a callback for all nodes with key between start and end inclusive.
-// If either are nil, then it is open on that side (nil, nil is the same as Iterate). The keys and
-// values must not be modified, since they may point to data stored within IAVL.
+// If either are nil, then it is open on that side (nil, nil is the same as Iterate)
 func (t *ImmutableTree) IterateRangeInclusive(start, end []byte, ascending bool, fn func(key, value []byte, version int64) bool) (stopped bool) {
 	if t.root == nil {
 		return false
 	}
-	return t.root.traverseInRange(t, start, end, ascending, true, 0, false, func(node *Node, _ uint8) bool {
+	return t.root.traverseInRange(t, start, end, ascending, true, 0, func(node *Node, _ uint8) bool {
 		if node.height == 0 {
 			return fn(node.key, node.value, node.version)
 		}

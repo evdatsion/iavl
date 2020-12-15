@@ -1,9 +1,7 @@
-// nolint: errcheck
 package iavl
 
 import (
 	"bytes"
-	"encoding/hex"
 	mrand "math/rand"
 	"sort"
 	"testing"
@@ -14,8 +12,7 @@ import (
 )
 
 func TestBasic(t *testing.T) {
-	tree, err := getTestTree(0)
-	require.NoError(t, err)
+	tree := NewMutableTree(db.NewMemDB(), 0)
 	up := tree.Set([]byte("1"), []byte("one"))
 	if up {
 		t.Error("Did not expect an update (should have been create)")
@@ -150,7 +147,7 @@ func TestUnit(t *testing.T) {
 		tree.root = origNode
 	}
 
-	// Test Set cases:
+	//////// Test Set cases:
 
 	// Case 1:
 	t1 := T(N(4, 20))
@@ -173,7 +170,7 @@ func TestUnit(t *testing.T) {
 	expectSet(t4, 8, "(((1 2) (5 6)) ((7 8) 9))", 5)
 	expectSet(t4, 10, "(((1 2) (5 6)) (7 (9 10)))", 5)
 
-	// Test Remove cases:
+	//////// Test Remove cases:
 
 	t10 := T(N(N(1, 2), 3))
 
@@ -188,11 +185,12 @@ func TestUnit(t *testing.T) {
 }
 
 func TestRemove(t *testing.T) {
+	size := 10000
 	keyLen, dataLen := 16, 40
 
-	size := 10000
-	t1, err := getTestTree(size)
-	require.NoError(t, err)
+	d := db.NewDB("test", "memdb", "")
+	defer d.Close()
+	t1 := NewMutableTree(d, size)
 
 	// insert a bunch of random nodes
 	keys := make([][]byte, size)
@@ -222,8 +220,7 @@ func TestIntegration(t *testing.T) {
 	}
 
 	records := make([]*record, 400)
-	tree, err := getTestTree(0)
-	require.NoError(t, err)
+	tree := NewMutableTree(db.NewMemDB(), 0)
 
 	randomRecord := func() *record {
 		return &record{randstr(20), randstr(20)}
@@ -252,7 +249,7 @@ func TestIntegration(t *testing.T) {
 		if has := tree.Has([]byte(randstr(12))); has {
 			t.Error("Table has extra key")
 		}
-		if _, val := tree.Get([]byte(r.key)); string(val) != r.value {
+		if _, val := tree.Get([]byte(r.key)); string(val) != string(r.value) {
 			t.Error("wrong value")
 		}
 	}
@@ -260,7 +257,7 @@ func TestIntegration(t *testing.T) {
 	for i, x := range records {
 		if val, removed := tree.Remove([]byte(x.key)); !removed {
 			t.Error("Wasn't removed")
-		} else if string(val) != x.value {
+		} else if string(val) != string(x.value) {
 			t.Error("Wrong value")
 		}
 		for _, r := range records[i+1:] {
@@ -271,7 +268,7 @@ func TestIntegration(t *testing.T) {
 				t.Error("Table has extra key")
 			}
 			_, val := tree.Get([]byte(r.key))
-			if string(val) != r.value {
+			if string(val) != string(r.value) {
 				t.Error("wrong value")
 			}
 		}
@@ -305,8 +302,7 @@ func TestIterateRange(t *testing.T) {
 	}
 	sort.Strings(keys)
 
-	tree, err := getTestTree(0)
-	require.NoError(t, err)
+	tree := NewMutableTree(db.NewMemDB(), 0)
 
 	// insert all the data
 	for _, r := range records {
@@ -376,16 +372,14 @@ func TestPersistence(t *testing.T) {
 	}
 
 	// Construct some tree and save it
-	t1, err := NewMutableTree(db, 0)
-	require.NoError(t, err)
+	t1 := NewMutableTree(db, 0)
 	for key, value := range records {
 		t1.Set([]byte(key), []byte(value))
 	}
 	t1.SaveVersion()
 
 	// Load a tree
-	t2, err := NewMutableTree(db, 0)
-	require.NoError(t, err)
+	t2 := NewMutableTree(db, 0)
 	t2.Load()
 	for key, value := range records {
 		_, t2value := t2.Get([]byte(key))
@@ -398,8 +392,8 @@ func TestPersistence(t *testing.T) {
 func TestProof(t *testing.T) {
 
 	// Construct some random tree
-	tree, err := getTestTree(100)
-	require.NoError(t, err)
+	db := db.NewMemDB()
+	tree := NewMutableTree(db, 100)
 	for i := 0; i < 10; i++ {
 		key, value := randstr(20), randstr(20)
 		tree.Set([]byte(key), []byte(value))
@@ -428,9 +422,8 @@ func TestProof(t *testing.T) {
 
 func TestTreeProof(t *testing.T) {
 	db := db.NewMemDB()
-	tree, err := NewMutableTree(db, 100)
-	require.NoError(t, err)
-	assert.Equal(t, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", hex.EncodeToString(tree.Hash()))
+	tree := NewMutableTree(db, 100)
+	assert.Equal(t, tree.Hash(), []byte(nil))
 
 	// should get false for proof with nil root
 	value, proof, err := tree.GetWithProof([]byte("foo"))

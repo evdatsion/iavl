@@ -1,12 +1,9 @@
-// nolint:errcheck
 package iavl
 
 import (
 	"bytes"
-	"encoding/hex"
 	"flag"
 	"fmt"
-	"math/rand"
 	"os"
 	"runtime"
 	"strconv"
@@ -14,7 +11,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
 	cmn "github.com/evdatsion/iavl/common"
 	db "github.com/evdatsion/tm-db"
 )
@@ -23,7 +19,7 @@ var testLevelDB bool
 var testFuzzIterations int
 var random *cmn.Rand
 
-func SetupTest() {
+func init() {
 	random = cmn.NewRand()
 	random.Seed(0) // for determinism
 	flag.BoolVar(&testLevelDB, "test.leveldb", false, "test leveldb backend")
@@ -47,12 +43,11 @@ func getTestDB() (db.DB, func()) {
 
 func TestVersionedRandomTree(t *testing.T) {
 	require := require.New(t)
-	SetupTest()
+
 	d, closeDB := getTestDB()
 	defer closeDB()
 
-	tree, err := NewMutableTree(d, 100)
-	require.NoError(err)
+	tree := NewMutableTree(d, 100)
 	versions := 50
 	keysPerVersion := 30
 
@@ -99,82 +94,13 @@ func TestVersionedRandomTree(t *testing.T) {
 	require.Equal(tree.nodeSize(), len(tree.ndb.nodes()))
 }
 
-// nolint: dupl
-func TestTreeHash(t *testing.T) {
-	const (
-		randSeed  = 49872768940 // For deterministic tests
-		keySize   = 16
-		valueSize = 16
-
-		versions    = 4    // number of versions to generate
-		versionOps  = 4096 // number of operations (create/update/delete) per version
-		updateRatio = 0.4  // ratio of updates out of all operations
-		deleteRatio = 0.2  // ratio of deletes out of all operations
-	)
-
-	// expected hashes for each version
-	expectHashes := []string{
-		"58ec30fa27f338057e5964ed9ec3367e59b2b54bec4c194f10fde7fed16c2a1c",
-		"91ad3ace227372f0064b2d63e8493ce8f4bdcbd16c7a8e4f4d54029c9db9570c",
-		"92c25dce822c5968c228cfe7e686129ea281f79273d4a8fcf6f9130a47aa5421",
-		"e44d170925554f42e00263155c19574837a38e3efed8910daccc7fa12f560fa0",
-	}
-	require.Len(t, expectHashes, versions, "must have expected hashes for all versions")
-
-	r := rand.New(rand.NewSource(randSeed))
-	tree, err := NewMutableTree(db.NewMemDB(), 0)
-	require.NoError(t, err)
-
-	keys := make([][]byte, 0, versionOps)
-	for i := 0; i < versions; i++ {
-		for j := 0; j < versionOps; j++ {
-			key := make([]byte, keySize)
-			value := make([]byte, valueSize)
-
-			// The performance of this is likely to be terrible, but that's fine for small tests
-			switch {
-			case len(keys) > 0 && r.Float64() <= deleteRatio:
-				index := r.Intn(len(keys))
-				key = keys[index]
-				keys = append(keys[:index], keys[index+1:]...)
-				_, removed := tree.Remove(key)
-				require.True(t, removed)
-
-			case len(keys) > 0 && r.Float64() <= updateRatio:
-				key = keys[r.Intn(len(keys))]
-				r.Read(value)
-				updated := tree.Set(key, value)
-				require.True(t, updated)
-
-			default:
-				r.Read(key)
-				r.Read(value)
-				// If we get an update, set again
-				for tree.Set(key, value) {
-					key = make([]byte, keySize)
-					r.Read(key)
-				}
-				keys = append(keys, key)
-			}
-		}
-		hash, version, err := tree.SaveVersion()
-		require.NoError(t, err)
-		require.EqualValues(t, i+1, version)
-		require.Equal(t, expectHashes[i], hex.EncodeToString(hash))
-	}
-
-	require.EqualValues(t, versions, tree.Version())
-}
-
 func TestVersionedRandomTreeSmallKeys(t *testing.T) {
 	require := require.New(t)
 	d, closeDB := getTestDB()
 	defer closeDB()
 
-	tree, err := NewMutableTree(d, 100)
-	require.NoError(err)
-	singleVersionTree, err := getTestTree(0)
-	require.NoError(err)
+	tree := NewMutableTree(d, 100)
+	singleVersionTree := NewMutableTree(db.NewMemDB(), 0)
 	versions := 20
 	keysPerVersion := 50
 
@@ -214,10 +140,8 @@ func TestVersionedRandomTreeSmallKeysRandomDeletes(t *testing.T) {
 	d, closeDB := getTestDB()
 	defer closeDB()
 
-	tree, err := NewMutableTree(d, 100)
-	require.NoError(err)
-	singleVersionTree, err := getTestTree(0)
-	require.NoError(err)
+	tree := NewMutableTree(d, 100)
+	singleVersionTree := NewMutableTree(db.NewMemDB(), 0)
 	versions := 30
 	keysPerVersion := 50
 
@@ -253,8 +177,7 @@ func TestVersionedRandomTreeSmallKeysRandomDeletes(t *testing.T) {
 }
 
 func TestVersionedTreeSpecial1(t *testing.T) {
-	tree, err := getTestTree(100)
-	require.NoError(t, err)
+	tree := NewMutableTree(db.NewMemDB(), 100)
 
 	tree.Set([]byte("C"), []byte("so43QQFN"))
 	tree.SaveVersion()
@@ -277,8 +200,7 @@ func TestVersionedTreeSpecial1(t *testing.T) {
 
 func TestVersionedRandomTreeSpecial2(t *testing.T) {
 	require := require.New(t)
-	tree, err := getTestTree(100)
-	require.NoError(err)
+	tree := NewMutableTree(db.NewMemDB(), 100)
 
 	tree.Set([]byte("OFMe2Yvm"), []byte("ez2OtQtE"))
 	tree.Set([]byte("WEN4iN7Y"), []byte("kQNyUalI"))
@@ -297,28 +219,27 @@ func TestVersionedEmptyTree(t *testing.T) {
 	d, closeDB := getTestDB()
 	defer closeDB()
 
-	tree, err := NewMutableTree(d, 0)
-	require.NoError(err)
+	tree := NewMutableTree(d, 0)
 
 	hash, v, err := tree.SaveVersion()
-	require.NoError(err)
-	require.Equal("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", hex.EncodeToString(hash))
+	require.Nil(hash)
 	require.EqualValues(1, v)
+	require.NoError(err)
 
 	hash, v, err = tree.SaveVersion()
-	require.NoError(err)
-	require.Equal("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", hex.EncodeToString(hash))
+	require.Nil(hash)
 	require.EqualValues(2, v)
+	require.NoError(err)
 
 	hash, v, err = tree.SaveVersion()
-	require.NoError(err)
-	require.Equal("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", hex.EncodeToString(hash))
+	require.Nil(hash)
 	require.EqualValues(3, v)
+	require.NoError(err)
 
 	hash, v, err = tree.SaveVersion()
-	require.NoError(err)
-	require.Equal("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", hex.EncodeToString(hash))
+	require.Nil(hash)
 	require.EqualValues(4, v)
+	require.NoError(err)
 
 	require.EqualValues(4, tree.Version())
 
@@ -336,8 +257,7 @@ func TestVersionedEmptyTree(t *testing.T) {
 
 	// Now reload the tree.
 
-	tree, err = NewMutableTree(d, 0)
-	require.NoError(err)
+	tree = NewMutableTree(d, 0)
 	tree.Load()
 
 	require.False(tree.VersionExists(1))
@@ -355,8 +275,7 @@ func TestVersionedTree(t *testing.T) {
 	d, closeDB := getTestDB()
 	defer closeDB()
 
-	tree, err := NewMutableTree(d, 0)
-	require.NoError(err)
+	tree := NewMutableTree(d, 0)
 
 	// We start with zero keys in the databse.
 	require.Equal(0, tree.ndb.size())
@@ -400,8 +319,7 @@ func TestVersionedTree(t *testing.T) {
 
 	// Recreate a new tree and load it, to make sure it works in this
 	// scenario.
-	tree, err = NewMutableTree(d, 100)
-	require.NoError(err)
+	tree = NewMutableTree(d, 100)
 	_, err = tree.Load()
 	require.NoError(err)
 
@@ -421,8 +339,8 @@ func TestVersionedTree(t *testing.T) {
 	require.Len(nodes2, 5, "db should have grown in size")
 	require.Len(tree.ndb.orphans(), 3, "db should have three orphans")
 
-	// Create three more orphans.
-	tree.Remove([]byte("key1")) // orphans both leaf node and inner node containing "key1" and "key2"
+	// Create two more orphans.
+	tree.Remove([]byte("key1"))
 	tree.Set([]byte("key2"), []byte("val2"))
 
 	hash3, v3, _ := tree.SaveVersion()
@@ -441,14 +359,13 @@ func TestVersionedTree(t *testing.T) {
 
 	nodes3 := tree.ndb.leafNodes()
 	require.Len(nodes3, 6, "wrong number of nodes")
-	require.Len(tree.ndb.orphans(), 7, "wrong number of orphans")
+	require.Len(tree.ndb.orphans(), 6, "wrong number of orphans")
 
 	hash4, _, _ := tree.SaveVersion()
 	require.EqualValues(hash3, hash4)
 	require.NotNil(hash4)
 
-	tree, err = NewMutableTree(d, 100)
-	require.NoError(err)
+	tree = NewMutableTree(d, 100)
 	_, err = tree.Load()
 	require.NoError(err)
 
@@ -543,8 +460,7 @@ func TestVersionedTreeVersionDeletingEfficiency(t *testing.T) {
 	d, closeDB := getTestDB()
 	defer closeDB()
 
-	tree, err := NewMutableTree(d, 0)
-	require.NoError(t, err)
+	tree := NewMutableTree(d, 0)
 
 	tree.Set([]byte("key0"), []byte("val0"))
 	tree.Set([]byte("key1"), []byte("val0"))
@@ -575,8 +491,7 @@ func TestVersionedTreeVersionDeletingEfficiency(t *testing.T) {
 
 	require.Len(t, tree.ndb.leafNodes(), 3)
 
-	tree2, err := getTestTree(0)
-	require.NoError(t, err)
+	tree2 := NewMutableTree(db.NewMemDB(), 0)
 	tree2.Set([]byte("key0"), []byte("val2"))
 	tree2.Set([]byte("key2"), []byte("val2"))
 	tree2.Set([]byte("key3"), []byte("val1"))
@@ -586,8 +501,8 @@ func TestVersionedTreeVersionDeletingEfficiency(t *testing.T) {
 }
 
 func TestVersionedTreeOrphanDeleting(t *testing.T) {
-	tree, err := getTestTree(0)
-	require.NoError(t, err)
+	mdb := db.NewMemDB()
+	tree := NewMutableTree(mdb, 0)
 
 	tree.Set([]byte("key0"), []byte("val0"))
 	tree.Set([]byte("key1"), []byte("val0"))
@@ -625,11 +540,7 @@ func TestVersionedTreeOrphanDeleting(t *testing.T) {
 
 func TestVersionedTreeSpecialCase(t *testing.T) {
 	require := require.New(t)
-	d, closeDB := getTestDB()
-	defer closeDB()
-
-	tree, err := NewMutableTree(d, 0)
-	require.NoError(err)
+	tree := NewMutableTree(db.NewMemDB(), 100)
 
 	tree.Set([]byte("key1"), []byte("val0"))
 	tree.Set([]byte("key2"), []byte("val0"))
@@ -650,10 +561,9 @@ func TestVersionedTreeSpecialCase(t *testing.T) {
 
 func TestVersionedTreeSpecialCase2(t *testing.T) {
 	require := require.New(t)
-
 	d := db.NewMemDB()
-	tree, err := NewMutableTree(d, 100)
-	require.NoError(err)
+
+	tree := NewMutableTree(d, 100)
 
 	tree.Set([]byte("key1"), []byte("val0"))
 	tree.Set([]byte("key2"), []byte("val0"))
@@ -666,9 +576,8 @@ func TestVersionedTreeSpecialCase2(t *testing.T) {
 	tree.Set([]byte("key2"), []byte("val2"))
 	tree.SaveVersion()
 
-	tree, err = NewMutableTree(d, 100)
-	require.NoError(err)
-	_, err = tree.Load()
+	tree = NewMutableTree(d, 100)
+	_, err := tree.Load()
 	require.NoError(err)
 
 	require.NoError(tree.DeleteVersion(2))
@@ -679,8 +588,7 @@ func TestVersionedTreeSpecialCase2(t *testing.T) {
 
 func TestVersionedTreeSpecialCase3(t *testing.T) {
 	require := require.New(t)
-	tree, err := getTestTree(0)
-	require.NoError(err)
+	tree := NewMutableTree(db.NewMemDB(), 0)
 
 	tree.Set([]byte("m"), []byte("liWT0U6G"))
 	tree.Set([]byte("G"), []byte("7PxRXwUA"))
@@ -709,8 +617,7 @@ func TestVersionedTreeSpecialCase3(t *testing.T) {
 func TestVersionedTreeSaveAndLoad(t *testing.T) {
 	require := require.New(t)
 	d := db.NewMemDB()
-	tree, err := NewMutableTree(d, 0)
-	require.NoError(err)
+	tree := NewMutableTree(d, 0)
 
 	// Loading with an empty root is a no-op.
 	tree.Load()
@@ -734,8 +641,7 @@ func TestVersionedTreeSaveAndLoad(t *testing.T) {
 	require.Equal(int64(6), tree.Version())
 
 	// Reload the tree, to test that roots and orphans are properly loaded.
-	ntree, err := NewMutableTree(d, 0)
-	require.NoError(err)
+	ntree := NewMutableTree(d, 0)
 	ntree.Load()
 
 	require.False(ntree.IsEmpty())
@@ -761,8 +667,7 @@ func TestVersionedTreeSaveAndLoad(t *testing.T) {
 
 func TestVersionedTreeErrors(t *testing.T) {
 	require := require.New(t)
-	tree, err := getTestTree(100)
-	require.NoError(err)
+	tree := NewMutableTree(db.NewMemDB(), 100)
 
 	// Can't delete non-existent versions.
 	require.Error(tree.DeleteVersion(1))
@@ -771,7 +676,7 @@ func TestVersionedTreeErrors(t *testing.T) {
 	tree.Set([]byte("key"), []byte("val"))
 
 	// Saving with content is ok.
-	_, _, err = tree.SaveVersion()
+	_, _, err := tree.SaveVersion()
 	require.NoError(err)
 
 	// Can't delete current version.
@@ -794,8 +699,7 @@ func TestVersionedCheckpoints(t *testing.T) {
 	d, closeDB := getTestDB()
 	defer closeDB()
 
-	tree, err := NewMutableTree(d, 100)
-	require.NoError(err)
+	tree := NewMutableTree(d, 100)
 	versions := 50
 	keysPerVersion := 10
 	versionsPerCheckpoint := 5
@@ -848,8 +752,7 @@ func TestVersionedCheckpoints(t *testing.T) {
 
 func TestVersionedCheckpointsSpecialCase(t *testing.T) {
 	require := require.New(t)
-	tree, err := getTestTree(0)
-	require.NoError(err)
+	tree := NewMutableTree(db.NewMemDB(), 0)
 	key := []byte("k")
 
 	tree.Set(key, []byte("val1"))
@@ -874,8 +777,7 @@ func TestVersionedCheckpointsSpecialCase(t *testing.T) {
 }
 
 func TestVersionedCheckpointsSpecialCase2(t *testing.T) {
-	tree, err := getTestTree(0)
-	require.NoError(t, err)
+	tree := NewMutableTree(db.NewMemDB(), 0)
 
 	tree.Set([]byte("U"), []byte("XamDUtiJ"))
 	tree.Set([]byte("A"), []byte("UkZBuYIU"))
@@ -895,8 +797,7 @@ func TestVersionedCheckpointsSpecialCase2(t *testing.T) {
 }
 
 func TestVersionedCheckpointsSpecialCase3(t *testing.T) {
-	tree, err := getTestTree(0)
-	require.NoError(t, err)
+	tree := NewMutableTree(db.NewMemDB(), 0)
 
 	tree.Set([]byte("n"), []byte("2wUCUs8q"))
 	tree.Set([]byte("l"), []byte("WQ7mvMbc"))
@@ -916,8 +817,7 @@ func TestVersionedCheckpointsSpecialCase3(t *testing.T) {
 }
 
 func TestVersionedCheckpointsSpecialCase4(t *testing.T) {
-	tree, err := NewMutableTree(db.NewMemDB(), 0)
-	require.NoError(t, err)
+	tree := NewMutableTree(db.NewMemDB(), 0)
 
 	tree.Set([]byte("U"), []byte("XamDUtiJ"))
 	tree.Set([]byte("A"), []byte("UkZBuYIU"))
@@ -949,8 +849,7 @@ func TestVersionedCheckpointsSpecialCase4(t *testing.T) {
 }
 
 func TestVersionedCheckpointsSpecialCase5(t *testing.T) {
-	tree, err := getTestTree(0)
-	require.NoError(t, err)
+	tree := NewMutableTree(db.NewMemDB(), 0)
 
 	tree.Set([]byte("R"), []byte("ygZlIzeW"))
 	tree.SaveVersion()
@@ -967,8 +866,7 @@ func TestVersionedCheckpointsSpecialCase5(t *testing.T) {
 }
 
 func TestVersionedCheckpointsSpecialCase6(t *testing.T) {
-	tree, err := getTestTree(0)
-	require.NoError(t, err)
+	tree := NewMutableTree(db.NewMemDB(), 0)
 
 	tree.Set([]byte("Y"), []byte("MW79JQeV"))
 	tree.Set([]byte("7"), []byte("Kp0ToUJB"))
@@ -1000,8 +898,7 @@ func TestVersionedCheckpointsSpecialCase6(t *testing.T) {
 }
 
 func TestVersionedCheckpointsSpecialCase7(t *testing.T) {
-	tree, err := getTestTree(100)
-	require.NoError(t, err)
+	tree := NewMutableTree(db.NewMemDB(), 100)
 
 	tree.Set([]byte("n"), []byte("OtqD3nyn"))
 	tree.Set([]byte("W"), []byte("kMdhJjF5"))
@@ -1035,8 +932,7 @@ func TestVersionedCheckpointsSpecialCase7(t *testing.T) {
 
 func TestVersionedTreeEfficiency(t *testing.T) {
 	require := require.New(t)
-	tree, err := NewMutableTree(db.NewMemDB(), 0)
-	require.NoError(err)
+	tree := NewMutableTree(db.NewMemDB(), 0)
 	versions := 20
 	keysPerVersion := 100
 	keysAddedPerVersion := map[int]int{}
@@ -1057,30 +953,26 @@ func TestVersionedTreeEfficiency(t *testing.T) {
 
 	keysDeleted := 0
 	for i := 1; i < versions; i++ {
-		if tree.VersionExists(int64(i)) {
-			sizeBefore := len(tree.ndb.nodes())
-			tree.DeleteVersion(int64(i))
-			sizeAfter := len(tree.ndb.nodes())
+		sizeBefore := len(tree.ndb.nodes())
+		tree.DeleteVersion(int64(i))
+		sizeAfter := len(tree.ndb.nodes())
 
-			change := sizeBefore - sizeAfter
-			keysDeleted += change
+		change := sizeBefore - sizeAfter
+		keysDeleted += change
 
-			require.InDelta(change, keysAddedPerVersion[i], float64(keysPerVersion)/5)
-		}
+		require.InDelta(change, keysAddedPerVersion[i], float64(keysPerVersion)/5)
 	}
 	require.Equal(keysAdded-tree.nodeSize(), keysDeleted)
 }
 
 func TestVersionedTreeProofs(t *testing.T) {
 	require := require.New(t)
-	tree, err := getTestTree(0)
-	require.NoError(err)
+	tree := NewMutableTree(db.NewMemDB(), 0)
 
 	tree.Set([]byte("k1"), []byte("v1"))
 	tree.Set([]byte("k2"), []byte("v1"))
 	tree.Set([]byte("k3"), []byte("v1"))
-	_, _, err = tree.SaveVersion()
-	require.NoError(err)
+	tree.SaveVersion()
 
 	// fmt.Println("TREE VERSION 1")
 	// printNode(tree.ndb, tree.root, 0)
@@ -1090,8 +982,7 @@ func TestVersionedTreeProofs(t *testing.T) {
 
 	tree.Set([]byte("k2"), []byte("v2"))
 	tree.Set([]byte("k4"), []byte("v2"))
-	_, _, err = tree.SaveVersion()
-	require.NoError(err)
+	tree.SaveVersion()
 
 	// fmt.Println("TREE VERSION 2")
 	// printNode(tree.ndb, tree.root, 0)
@@ -1101,8 +992,7 @@ func TestVersionedTreeProofs(t *testing.T) {
 	require.NotEqual(root1, root2)
 
 	tree.Remove([]byte("k2"))
-	_, _, err = tree.SaveVersion()
-	require.NoError(err)
+	tree.SaveVersion()
 
 	// fmt.Println("TREE VERSION 3")
 	// printNode(tree.ndb, tree.root, 0)
@@ -1146,12 +1036,11 @@ func TestVersionedTreeProofs(t *testing.T) {
 }
 
 func TestOrphans(t *testing.T) {
-	// If you create a sequence of saved versions
-	// Then randomly delete versions other than the first and last until only those two remain
-	// Any remaining orphan nodes should either have fromVersion == firstVersion || toVersion == lastVersion
+	//If you create a sequence of saved versions
+	//Then randomly delete versions other than the first and last until only those two remain
+	//Any remaining orphan nodes should be constrained to just the first version
 	require := require.New(t)
-	tree, err := NewMutableTree(db.NewMemDB(), 100)
-	require.NoError(err)
+	tree := NewMutableTree(db.NewMemDB(), 100)
 
 	NUMVERSIONS := 100
 	NUMUPDATES := 100
@@ -1165,48 +1054,44 @@ func TestOrphans(t *testing.T) {
 	}
 
 	idx := cmn.RandPerm(NUMVERSIONS - 2)
-	for _, v := range idx {
-		err := tree.DeleteVersion(int64(v + 1))
+	for i := range idx {
+		err := tree.DeleteVersion(int64(i + 2))
 		require.NoError(err, "DeleteVersion should not error")
 	}
 
 	tree.ndb.traverseOrphans(func(k, v []byte) {
 		var fromVersion, toVersion int64
 		orphanKeyFormat.Scan(k, &toVersion, &fromVersion)
-		require.True(fromVersion == int64(1) || toVersion == int64(99), fmt.Sprintf(`Unexpected orphan key exists: %v with fromVersion = %d and toVersion = %d.\n 
-			Any orphan remaining in db should have either fromVersion == 1 or toVersion == 99. Since Version 1 and 99 are only versions in db`, k, fromVersion, toVersion))
+		require.Equal(fromVersion, int64(1), "fromVersion should be 1")
+		require.Equal(toVersion, int64(1), "toVersion should be 1")
 	})
 }
 
 func TestVersionedTreeHash(t *testing.T) {
 	require := require.New(t)
-	tree, err := getTestTree(0)
-	require.NoError(err)
+	tree := NewMutableTree(db.NewMemDB(), 0)
 
-	require.Equal("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", hex.EncodeToString(tree.Hash()))
+	require.Nil(tree.Hash())
 	tree.Set([]byte("I"), []byte("D"))
-	require.Equal("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", hex.EncodeToString(tree.Hash()))
+	require.Nil(tree.Hash())
 
-	hash1, _, err := tree.SaveVersion()
-	require.NoError(err)
+	hash1, _, _ := tree.SaveVersion()
 
 	tree.Set([]byte("I"), []byte("F"))
 	require.EqualValues(hash1, tree.Hash())
 
-	hash2, _, err := tree.SaveVersion()
-	require.NoError(err)
+	hash2, _, _ := tree.SaveVersion()
 
 	val, proof, err := tree.GetVersionedWithProof([]byte("I"), 2)
 	require.NoError(err)
-	require.EqualValues([]byte("F"), val)
+	require.EqualValues(val, []byte("F"))
 	require.NoError(proof.Verify(hash2))
 	require.NoError(proof.VerifyItem([]byte("I"), val))
 }
 
 func TestNilValueSemantics(t *testing.T) {
 	require := require.New(t)
-	tree, err := getTestTree(0)
-	require.NoError(err)
+	tree := NewMutableTree(db.NewMemDB(), 0)
 
 	require.Panics(func() {
 		tree.Set([]byte("k"), nil)
@@ -1216,8 +1101,7 @@ func TestNilValueSemantics(t *testing.T) {
 func TestCopyValueSemantics(t *testing.T) {
 	require := require.New(t)
 
-	tree, err := getTestTree(0)
-	require.NoError(err)
+	tree := NewMutableTree(db.NewMemDB(), 0)
 
 	val := []byte("v1")
 
@@ -1234,8 +1118,7 @@ func TestCopyValueSemantics(t *testing.T) {
 func TestRollback(t *testing.T) {
 	require := require.New(t)
 
-	tree, err := getTestTree(0)
-	require.NoError(err)
+	tree := NewMutableTree(db.NewMemDB(), 0)
 
 	tree.Set([]byte("k"), []byte("v"))
 	tree.SaveVersion()
@@ -1262,8 +1145,8 @@ func TestRollback(t *testing.T) {
 }
 
 func TestLazyLoadVersion(t *testing.T) {
-	tree, err := getTestTree(0)
-	require.NoError(t, err)
+	mdb := db.NewMemDB()
+	tree := NewMutableTree(mdb, 0)
 	maxVersions := 10
 
 	version, err := tree.LazyLoadVersion(0)
@@ -1273,7 +1156,7 @@ func TestLazyLoadVersion(t *testing.T) {
 	for i := 0; i < maxVersions; i++ {
 		tree.Set([]byte(fmt.Sprintf("key_%d", i+1)), []byte(fmt.Sprintf("value_%d", i+1)))
 
-		_, _, err = tree.SaveVersion()
+		_, _, err := tree.SaveVersion()
 		require.NoError(t, err, "SaveVersion should not fail")
 	}
 
@@ -1303,12 +1186,11 @@ func TestOverwrite(t *testing.T) {
 	require := require.New(t)
 
 	mdb := db.NewMemDB()
-	tree, err := NewMutableTree(mdb, 0)
-	require.NoError(err)
+	tree := NewMutableTree(mdb, 0)
 
 	// Set one kv pair and save version 1
 	tree.Set([]byte("key1"), []byte("value1"))
-	_, _, err = tree.SaveVersion()
+	_, _, err := tree.SaveVersion()
 	require.NoError(err, "SaveVersion should not fail")
 
 	// Set another kv pair and save version 2
@@ -1317,8 +1199,7 @@ func TestOverwrite(t *testing.T) {
 	require.NoError(err, "SaveVersion should not fail")
 
 	// Reload tree at version 1
-	tree, err = NewMutableTree(mdb, 0)
-	require.NoError(err)
+	tree = NewMutableTree(mdb, 0)
 	_, err = tree.LoadVersion(int64(1))
 	require.NoError(err, "LoadVersion should not fail")
 
@@ -1333,65 +1214,27 @@ func TestOverwrite(t *testing.T) {
 	require.NoError(err, "SaveVersion should not fail, overwrite was idempotent")
 }
 
-func TestOverwriteEmpty(t *testing.T) {
-	require := require.New(t)
-
-	mdb := db.NewMemDB()
-	tree, err := NewMutableTree(mdb, 0)
-	require.NoError(err)
-
-	// Save empty version 1
-	_, _, err = tree.SaveVersion()
-	require.NoError(err)
-
-	// Save empty version 2
-	_, _, err = tree.SaveVersion()
-	require.NoError(err)
-
-	// Save a key in version 3
-	tree.Set([]byte("key"), []byte("value"))
-	_, _, err = tree.SaveVersion()
-	require.NoError(err)
-
-	// Load version 1 and attempt to save a different key
-	_, err = tree.LoadVersion(1)
-	require.NoError(err)
-	tree.Set([]byte("foo"), []byte("bar"))
-	_, _, err = tree.SaveVersion()
-	require.Error(err)
-
-	// However, deleting the key and saving an empty version should work,
-	// since it's the same as the existing version.
-	tree.Remove([]byte("foo"))
-	_, version, err := tree.SaveVersion()
-	require.NoError(err)
-	require.EqualValues(2, version)
-}
-
 func TestLoadVersionForOverwriting(t *testing.T) {
 	require := require.New(t)
 
 	mdb := db.NewMemDB()
-	tree, err := NewMutableTree(mdb, 0)
-	require.NoError(err)
+	tree := NewMutableTree(mdb, 0)
 
 	maxLength := 100
 	for count := 1; count <= maxLength; count++ {
 		countStr := strconv.Itoa(count)
 		// Set one kv pair and save version
 		tree.Set([]byte("key"+countStr), []byte("value"+countStr))
-		_, _, err = tree.SaveVersion()
+		_, _, err := tree.SaveVersion()
 		require.NoError(err, "SaveVersion should not fail")
 	}
 
-	tree, err = NewMutableTree(mdb, 0)
-	require.NoError(err)
+	tree = NewMutableTree(mdb, 0)
 	targetVersion, _ := tree.LoadVersionForOverwriting(int64(maxLength * 2))
 	require.Equal(targetVersion, int64(maxLength), "targetVersion shouldn't larger than the actual tree latest version")
 
-	tree, err = NewMutableTree(mdb, 0)
-	require.NoError(err)
-	_, err = tree.LoadVersionForOverwriting(int64(maxLength / 2))
+	tree = NewMutableTree(mdb, 0)
+	_, err := tree.LoadVersionForOverwriting(int64(maxLength / 2))
 	require.NoError(err, "LoadVersion should not fail")
 
 	for version := 1; version <= maxLength/2; version++ {
@@ -1413,8 +1256,7 @@ func TestLoadVersionForOverwriting(t *testing.T) {
 	require.NoError(err, "SaveVersion should not fail, overwrite was allowed")
 
 	// Reload tree at version 50, the latest tree version is 52
-	tree, err = NewMutableTree(mdb, 0)
-	require.NoError(err)
+	tree = NewMutableTree(mdb, 0)
 	_, err = tree.LoadVersion(int64(maxLength / 2))
 	require.NoError(err, "LoadVersion should not fail")
 
@@ -1430,109 +1272,14 @@ func TestLoadVersionForOverwriting(t *testing.T) {
 	_, _, err = tree.SaveVersion()
 	require.NoError(err, "SaveVersion should not fail, write the same value")
 
-	// The tree version now is 52 which is equal to latest version.
-	// Now any key value can be written into the tree
+	//The tree version now is 52 which is equal to latest version.
+	//Now any key value can be written into the tree
 	tree.Set([]byte("key any value"), []byte("value any value"))
 	_, _, err = tree.SaveVersion()
 	require.NoError(err, "SaveVersion should not fail.")
 }
 
-func TestDeleteVersionsCompare(t *testing.T) {
-	require := require.New(t)
-
-	var databaseSizeDeleteVersionsRange, databaseSizeDeleteVersion, databaseSizeDeleteVersions string
-
-	const maxLength = 100
-	const fromLength = 5
-	{
-		mdb := db.NewMemDB()
-		tree, err := NewMutableTree(mdb, 0)
-		require.NoError(err)
-
-		versions := make([]int64, 0, maxLength)
-		for count := 1; count <= maxLength; count++ {
-			versions = append(versions, int64(count))
-			countStr := strconv.Itoa(count)
-			// Set kv pair and save version
-			tree.Set([]byte("aaa"), []byte("bbb"))
-			tree.Set([]byte("key"+countStr), []byte("value"+countStr))
-			_, _, err = tree.SaveVersion()
-			require.NoError(err, "SaveVersion should not fail")
-		}
-
-		tree, err = NewMutableTree(mdb, 0)
-		require.NoError(err)
-		targetVersion, err := tree.LoadVersion(int64(maxLength))
-		require.NoError(err)
-		require.Equal(targetVersion, int64(maxLength), "targetVersion shouldn't larger than the actual tree latest version")
-
-		err = tree.DeleteVersionsRange(versions[fromLength], versions[int64(maxLength/2)])
-		require.NoError(err, "DeleteVersionsRange should not fail")
-
-		databaseSizeDeleteVersionsRange = mdb.Stats()["database.size"]
-	}
-	{
-		mdb := db.NewMemDB()
-		tree, err := NewMutableTree(mdb, 0)
-		require.NoError(err)
-
-		versions := make([]int64, 0, maxLength)
-		for count := 1; count <= maxLength; count++ {
-			versions = append(versions, int64(count))
-			countStr := strconv.Itoa(count)
-			// Set kv pair and save version
-			tree.Set([]byte("aaa"), []byte("bbb"))
-			tree.Set([]byte("key"+countStr), []byte("value"+countStr))
-			_, _, err = tree.SaveVersion()
-			require.NoError(err, "SaveVersion should not fail")
-		}
-
-		tree, err = NewMutableTree(mdb, 0)
-		require.NoError(err)
-		targetVersion, err := tree.LoadVersion(int64(maxLength))
-		require.NoError(err)
-		require.Equal(targetVersion, int64(maxLength), "targetVersion shouldn't larger than the actual tree latest version")
-
-		for _, version := range versions[fromLength:int64(maxLength/2)] {
-			err = tree.DeleteVersion(version)
-			require.NoError(err, "DeleteVersion should not fail for %v", version)
-		}
-
-		databaseSizeDeleteVersion = mdb.Stats()["database.size"]
-	}
-	{
-		mdb := db.NewMemDB()
-		tree, err := NewMutableTree(mdb, 0)
-		require.NoError(err)
-
-		versions := make([]int64, 0, maxLength)
-		for count := 1; count <= maxLength; count++ {
-			versions = append(versions, int64(count))
-			countStr := strconv.Itoa(count)
-			// Set kv pair and save version
-			tree.Set([]byte("aaa"), []byte("bbb"))
-			tree.Set([]byte("key"+countStr), []byte("value"+countStr))
-			_, _, err = tree.SaveVersion()
-			require.NoError(err, "SaveVersion should not fail")
-		}
-
-		tree, err = NewMutableTree(mdb, 0)
-		require.NoError(err)
-		targetVersion, err := tree.LoadVersion(int64(maxLength))
-		require.NoError(err)
-		require.Equal(targetVersion, int64(maxLength), "targetVersion shouldn't larger than the actual tree latest version")
-
-		err = tree.DeleteVersions(versions[fromLength:int64(maxLength/2)]...)
-		require.NoError(err, "DeleteVersions should not fail")
-
-		databaseSizeDeleteVersions = mdb.Stats()["database.size"]
-	}
-
-	require.Equal(databaseSizeDeleteVersion, databaseSizeDeleteVersionsRange)
-	require.Equal(databaseSizeDeleteVersion, databaseSizeDeleteVersions)
-}
-
-// BENCHMARKS
+//////////////////////////// BENCHMARKS ///////////////////////////////////////
 
 func BenchmarkTreeLoadAndDelete(b *testing.B) {
 	numVersions := 5000
@@ -1545,8 +1292,7 @@ func BenchmarkTreeLoadAndDelete(b *testing.B) {
 	defer d.Close()
 	defer os.RemoveAll("./bench.db")
 
-	tree, err := NewMutableTree(d, 0)
-	require.NoError(b, err)
+	tree := NewMutableTree(d, 0)
 	for v := 1; v < numVersions; v++ {
 		for i := 0; i < numKeysPerVersion; i++ {
 			tree.Set([]byte(cmn.RandStr(16)), cmn.RandBytes(32))
@@ -1557,8 +1303,7 @@ func BenchmarkTreeLoadAndDelete(b *testing.B) {
 	b.Run("LoadAndDelete", func(b *testing.B) {
 		for n := 0; n < b.N; n++ {
 			b.StopTimer()
-			tree, err = NewMutableTree(d, 0)
-			require.NoError(b, err)
+			tree = NewMutableTree(d, 0)
 			runtime.GC()
 			b.StartTimer()
 
@@ -1576,109 +1321,4 @@ func BenchmarkTreeLoadAndDelete(b *testing.B) {
 			}
 		}
 	})
-}
-
-func TestLoadVersionForOverwritingCase2(t *testing.T) {
-	require := require.New(t)
-
-	tree, _ := NewMutableTreeWithOpts(db.NewMemDB(), 0, nil)
-
-	for i := byte(0); i < 20; i++ {
-		tree.Set([]byte{i}, []byte{i})
-	}
-
-	_, _, err := tree.SaveVersion()
-	require.NoError(err, "SaveVersion should not fail")
-
-	for i := byte(0); i < 20; i++ {
-		tree.Set([]byte{i}, []byte{i + 1})
-	}
-
-	_, _, err = tree.SaveVersion()
-	require.NoError(err, "SaveVersion should not fail with the same key")
-
-	for i := byte(0); i < 20; i++ {
-		tree.Set([]byte{i}, []byte{i + 2})
-	}
-	tree.SaveVersion()
-
-	removedNodes := []*Node{}
-
-	for _, n := range tree.ndb.nodes() {
-		if n.version > 1 {
-			removedNodes = append(removedNodes, n)
-		}
-	}
-
-	_, err = tree.LoadVersionForOverwriting(1)
-	require.NoError(err, "LoadVersionForOverwriting should not fail")
-
-	for i := byte(0); i < 20; i++ {
-		_, v := tree.Get([]byte{i})
-		require.Equal([]byte{i}, v)
-	}
-
-	for _, n := range removedNodes {
-		has, _ := tree.ndb.Has(n.hash)
-		require.False(has, "LoadVersionForOverwriting should remove useless nodes")
-	}
-
-	tree.Set([]byte{0x2}, []byte{0x3})
-
-	_, _, err = tree.SaveVersion()
-	require.NoError(err, "SaveVersion should not fail")
-
-	err = tree.DeleteVersion(1)
-	require.NoError(err, "DeleteVersion should not fail")
-
-	tree.Set([]byte{0x1}, []byte{0x3})
-
-	_, _, err = tree.SaveVersion()
-	require.NoError(err, "SaveVersion should not fail")
-}
-
-func TestLoadVersionForOverwritingCase3(t *testing.T) {
-	require := require.New(t)
-
-	tree, err := NewMutableTreeWithOpts(db.NewMemDB(), 0, nil)
-	require.NoError(err)
-
-	for i := byte(0); i < 20; i++ {
-		tree.Set([]byte{i}, []byte{i})
-	}
-	_, _, err = tree.SaveVersion()
-	require.NoError(err)
-
-	for i := byte(0); i < 20; i++ {
-		tree.Set([]byte{i}, []byte{i + 1})
-	}
-	_, _, err = tree.SaveVersion()
-	require.NoError(err)
-
-	removedNodes := []*Node{}
-
-	for _, n := range tree.ndb.nodes() {
-		if n.version > 1 {
-			removedNodes = append(removedNodes, n)
-		}
-	}
-
-	for i := byte(0); i < 20; i++ {
-		tree.Remove([]byte{i})
-	}
-	_, _, err = tree.SaveVersion()
-	require.NoError(err)
-
-	_, err = tree.LoadVersionForOverwriting(1)
-	require.NoError(err)
-	for _, n := range removedNodes {
-		has, err := tree.ndb.Has(n.hash)
-		require.NoError(err)
-		require.False(has, "LoadVersionForOverwriting should remove useless nodes")
-	}
-
-	for i := byte(0); i < 20; i++ {
-		_, v := tree.Get([]byte{i})
-		require.Equal([]byte{i}, v)
-	}
 }

@@ -3,12 +3,9 @@ package iavl
 import (
 	"fmt"
 
-	proto "github.com/gogo/protobuf/proto"
 	"github.com/pkg/errors"
-	"github.com/evdatsion/tendermint/crypto/merkle"
-	tmmerkle "github.com/evdatsion/tendermint/proto/tendermint/crypto"
 
-	iavlproto "github.com/evdatsion/iavl/proto"
+	"github.com/evdatsion/tendermint/crypto/merkle"
 )
 
 const ProofOpIAVLValue = "iavl:v"
@@ -18,7 +15,7 @@ const ProofOpIAVLValue = "iavl:v"
 //
 // If the produced root hash matches the expected hash, the proof
 // is good.
-type ValueOp struct {
+type IAVLValueOp struct {
 	// Encoded in ProofOp.Key.
 	key []byte
 
@@ -28,64 +25,43 @@ type ValueOp struct {
 	Proof *RangeProof `json:"proof"`
 }
 
-var _ merkle.ProofOperator = ValueOp{}
+var _ merkle.ProofOperator = IAVLValueOp{}
 
-func NewValueOp(key []byte, proof *RangeProof) ValueOp {
-	return ValueOp{
+func NewIAVLValueOp(key []byte, proof *RangeProof) IAVLValueOp {
+	return IAVLValueOp{
 		key:   key,
 		Proof: proof,
 	}
 }
 
-func ValueOpDecoder(pop tmmerkle.ProofOp) (merkle.ProofOperator, error) {
+func IAVLValueOpDecoder(pop merkle.ProofOp) (merkle.ProofOperator, error) {
 	if pop.Type != ProofOpIAVLValue {
 		return nil, errors.Errorf("unexpected ProofOp.Type; got %v, want %v", pop.Type, ProofOpIAVLValue)
 	}
-	// Strip the varint length prefix, used for backwards compatibility with Amino.
-	bz, n, err := decodeBytes(pop.Data)
+	var op IAVLValueOp // a bit strange as we'll discard this, but it works.
+	err := cdc.UnmarshalBinaryLengthPrefixed(pop.Data, &op)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "decoding ProofOp.Data into IAVLValueOp")
 	}
-	if n != len(pop.Data) {
-		return nil, fmt.Errorf("unexpected bytes, expected %v got %v", n, len(pop.Data))
-	}
-	pbProofOp := &iavlproto.ValueOp{}
-	err = proto.Unmarshal(bz, pbProofOp)
-	if err != nil {
-		return nil, err
-	}
-	proof, err := RangeProofFromProto(pbProofOp.Proof)
-	if err != nil {
-		return nil, err
-	}
-	return NewValueOp(pop.Key, &proof), nil
+	return NewIAVLValueOp(pop.Key, op.Proof), nil
 }
 
-func (op ValueOp) ProofOp() tmmerkle.ProofOp {
-	pbProof := iavlproto.ValueOp{Proof: op.Proof.ToProto()}
-	bz, err := proto.Marshal(&pbProof)
-	if err != nil {
-		panic(err)
-	}
-	// We length-prefix the byte slice to retain backwards compatibility with the Amino proofs.
-	bz, err = encodeBytesSlice(bz)
-	if err != nil {
-		panic(err)
-	}
-	return tmmerkle.ProofOp{
+func (op IAVLValueOp) ProofOp() merkle.ProofOp {
+	bz := cdc.MustMarshalBinaryLengthPrefixed(op)
+	return merkle.ProofOp{
 		Type: ProofOpIAVLValue,
 		Key:  op.key,
 		Data: bz,
 	}
 }
 
-func (op ValueOp) String() string {
+func (op IAVLValueOp) String() string {
 	return fmt.Sprintf("IAVLValueOp{%v}", op.GetKey())
 }
 
-func (op ValueOp) Run(args [][]byte) ([][]byte, error) {
+func (op IAVLValueOp) Run(args [][]byte) ([][]byte, error) {
 	if len(args) != 1 {
-		return nil, errors.New("value size is not 1")
+		return nil, errors.New("Value size is not 1")
 	}
 	value := args[0]
 
@@ -99,13 +75,13 @@ func (op ValueOp) Run(args [][]byte) ([][]byte, error) {
 	// XXX What is the encoding for keys?
 	// We should decode the key depending on whether it's a string or hex,
 	// maybe based on quotes and 0x prefix?
-	err = op.Proof.VerifyItem(op.key, value)
+	err = op.Proof.VerifyItem([]byte(op.key), value)
 	if err != nil {
 		return nil, errors.Wrap(err, "verifying value")
 	}
 	return [][]byte{root}, nil
 }
 
-func (op ValueOp) GetKey() []byte {
+func (op IAVLValueOp) GetKey() []byte {
 	return op.key
 }

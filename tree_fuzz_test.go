@@ -1,4 +1,3 @@
-// nolint:errcheck
 package iavl
 
 import (
@@ -6,9 +5,8 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	cmn "github.com/evdatsion/iavl/common"
+	db "github.com/evdatsion/tm-db"
 )
 
 // This file implement fuzz testing by generating programs and then running
@@ -33,7 +31,7 @@ func (p *program) Execute(tree *MutableTree) (err error) {
 				}
 				str += prefix + instr.String() + "\n"
 			}
-			err = fmt.Errorf("program panicked with: %s\n%s", r, str)
+			err = fmt.Errorf("Program panicked with: %s\n%s", r, str)
 		}
 	}()
 
@@ -88,7 +86,7 @@ func genRandomProgram(size int) *program {
 	for p.size() < size {
 		k, v := []byte(cmn.RandStr(1)), []byte(cmn.RandStr(1))
 
-		switch rand.Int() % 7 {
+		switch rand.Int() % 7 { //nolint: gosec Turn off gosec here because this is for testing
 		case 0, 1, 2:
 			p.addInstruction(instruction{op: "SET", k: k, v: v})
 		case 3, 4:
@@ -97,7 +95,7 @@ func genRandomProgram(size int) *program {
 			p.addInstruction(instruction{op: "SAVE", version: int64(nextVersion)})
 			nextVersion++
 		case 6:
-			if rv := rand.Int() % nextVersion; rv < nextVersion && rv > 0 {
+			if rv := rand.Int() % nextVersion; rv < nextVersion && rv > 0 { //nolint: gosec Turn off gosec here because this is for testing
 				p.addInstruction(instruction{op: "DELETE", version: int64(rv)})
 			}
 		}
@@ -113,10 +111,9 @@ func TestMutableTreeFuzz(t *testing.T) {
 
 	for size := 5; iterations < maxIterations; size++ {
 		for i := 0; i < progsPerIteration/size; i++ {
-			tree, err := getTestTree(0)
-			require.NoError(t, err)
+			tree := NewMutableTree(db.NewMemDB(), 0)
 			program := genRandomProgram(size)
-			err = program.Execute(tree)
+			err := program.Execute(tree)
 			if err != nil {
 				t.Fatalf("Error after %d iterations (size %d): %s\n%s", iterations, size, err.Error(), tree.String())
 			}

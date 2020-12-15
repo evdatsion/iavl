@@ -1,4 +1,3 @@
-// nolint: errcheck,scopelint
 package benchmarks
 
 import (
@@ -7,16 +6,13 @@ import (
 	"hash"
 	"testing"
 
-	"github.com/evdatsion/iavl"
-
 	_ "crypto/sha256"
 
-	_ "golang.org/x/crypto/ripemd160" // nolint: staticcheck // need to test ripemd160
+	_ "golang.org/x/crypto/ripemd160"
 	_ "golang.org/x/crypto/sha3"
 )
 
 func BenchmarkHash(b *testing.B) {
-	fmt.Printf("%s\n", iavl.GetVersionInfo())
 	hashers := []struct {
 		name   string
 		size   int
