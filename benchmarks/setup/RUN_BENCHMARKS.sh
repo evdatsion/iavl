@@ -9,7 +9,7 @@
 # set repouser as your username to time your fork
 
 BRANCH=${1:-develop}
-REPOUSER=${2:-tendermint}
+REPOUSER=${2:-aphelion}
 
 export PATH=$PATH:/usr/local/go/bin
 export PATH=$PATH:$HOME/go/bin

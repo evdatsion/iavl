@@ -23,7 +23,7 @@ Typing `iaviewer` should run and print out a usage message.
 ### Sample databases
 
 Once you understand the tool, you will most likely want to run it on captures from your
-own abci app (built on cosmos-sdk or weave), but as a tutorial, you can try to use some
+own abci app (built on cusp-sdk or weave), but as a tutorial, you can try to use some
 captures from an actual bug I found in my code... Same data, different hash.
 
 ```shell
@@ -44,7 +44,7 @@ iaviewer versions ./bns-a.db
 ```
 
 This should print out a list of 20 versions of the code. Note the the iavl tree will persist multiple
-historical versions, which is a great aid in forensic queries (thanks Tendermint team!). For the rest
+historical versions, which is a great aid in forensic queries (thanks Aphelion team!). For the rest
 of the cases, we will consider only the last two versions, 190257 (last one where they match) and 190258
 (where they are different).
 
@@ -79,7 +79,7 @@ diff a-cur.data b-cur.data
 ```
 
 Hmmm... everything is the same, except the hash. Odd...
-So odd that I [wrote an article about it](https://medium.com/@ethan.frey/tracking-down-a-tendermint-consensus-failure-77f6ff414406)
+So odd that I [wrote an article about it](https://medium.com/@ethan.frey/tracking-down-a-aphelion-consensus-failure-77f6ff414406)
 
 And finally, if we want to inspect which keys were modified in the last block:
 
