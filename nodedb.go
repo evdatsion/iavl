@@ -7,7 +7,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/evdatsion/tendermint/crypto/tmhash"
+	"github.com/evdatsion/aphelion-dpos-bft/crypto/tmhash"
 	dbm "github.com/evdatsion/tm-db"
 )
 

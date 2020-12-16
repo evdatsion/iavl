@@ -19,10 +19,10 @@ github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSs
 github.com/etcd-io/bbolt v1.3.2/go.mod h1:ZF2nL25h33cCyBtcyWeZ2/I3HQOfTP+0PIEvHjkjCrw=
 github.com/etcd-io/bbolt v1.3.3 h1:gSJmxrs37LgTqR/oyJBWok6k6SvXEUerFTbltIhXkBM=
 github.com/etcd-io/bbolt v1.3.3/go.mod h1:ZF2nL25h33cCyBtcyWeZ2/I3HQOfTP+0PIEvHjkjCrw=
+github.com/evdatsion/aphelion-dpos-bft v0.32.1 h1:CtDqTR+Nd/Ur/7qzsGRtQJ627/fuPHZX3/iaMwvOUvk=
+github.com/evdatsion/aphelion-dpos-bft v0.32.1/go.mod h1:vHx6M99Aqf+Cc+i2I31+JNM16+lpK5TztL90/Xb6iAs=
 github.com/evdatsion/go-amino v0.14.1 h1:tHG0ma3xlF4/ehXwCJoftl3KwolYMDDta0nbxqj6oD8=
 github.com/evdatsion/go-amino v0.14.1/go.mod h1:hSWAQeo3bUQT13PUloEJl/HtHQAIAULYf2pNUn9rqpc=
-github.com/evdatsion/tendermint v0.32.1 h1:+vzGWF99nwO9wuKNNA4kolAKBSOPmWrptM8Zf4SV9QU=
-github.com/evdatsion/tendermint v0.32.1/go.mod h1:LQ+RfE2yGcwuccioCl6LNEqJdvtuRE/LhPDPAF6Ky1E=
 github.com/evdatsion/tm-db v0.1.1 h1:hJbG1evgYyxYq4NkjUAA2gPTTM6rktRe53rscmvaTrU=
 github.com/evdatsion/tm-db v0.1.1/go.mod h1:+ZECUVMvwT/HjcMdS9vNqm4mreruLCgw9cMqLrv21TY=
 github.com/facebookgo/ensure v0.0.0-20160127193407-b4ab57deab51 h1:0JZ+dUmQeA8IIVUMzysrX4/AKuQwWhV2dYQuPZdvdSQ=

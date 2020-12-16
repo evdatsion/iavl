@@ -23,7 +23,7 @@ IMPROVEMENTS
 
 IMPROVEMENTS
 
-- Use Tendermint v0.30.2 and close batch after write (related pull request in Tendermint: https://github.com/evdatsion/tendermint/pull/3397)
+- Use Tendermint v0.30.2 and close batch after write (related pull request in Tendermint: https://github.com/evdatsion/aphelion-dpos-bft/pull/3397)
 
 ## 0.12.1 (February 12, 2019)
 
@@ -35,7 +35,7 @@ IMPROVEMENTS
 
 BREAKING CHANGES
 
-- Uses new Tendermint ReverseIterator API. See https://github.com/evdatsion/tendermint/pull/2913
+- Uses new Tendermint ReverseIterator API. See https://github.com/evdatsion/aphelion-dpos-bft/pull/2913
 
 ## 0.11.1 (October 29, 2018)
 
