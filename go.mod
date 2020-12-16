@@ -3,7 +3,7 @@ module github.com/evdatsion/iavl
 go 1.12
 
 require (
-	github.com/evdatsion/aphelion-dpos-bft v0.32.1
+	github.com/evdatsion/aphelion-dpos-bft v0.32.1-rf2
 	github.com/evdatsion/go-amino v0.14.1
 	github.com/evdatsion/tm-db v0.1.1
 	github.com/pkg/errors v0.8.1
