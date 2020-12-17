@@ -5,7 +5,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/evdatsion/aphelion-dpos-bft/crypto/merkle"
+	"github.com/libonomy/aphelion-staking/crypto/merkle"
 )
 
 const ProofOpIAVLAbsence = "iavl:a"

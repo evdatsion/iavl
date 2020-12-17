@@ -8,7 +8,7 @@ import (
 
 	"github.com/evdatsion/go-amino"
 	cmn "github.com/evdatsion/iavl/common"
-	"github.com/evdatsion/aphelion-dpos-bft/crypto/tmhash"
+	"github.com/libonomy/aphelion-staking/crypto/tmhash"
 )
 
 var (
